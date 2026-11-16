@@ -20,6 +20,7 @@ prefix: "<brand> <muted>»</muted> "
 help:
   header: "<brand> <hl>Comandos"
   join: "<white>/bingo join <hl>[equipo]</hl></white> <muted>|</muted> <body>Únete a un equipo"
+  card: "<white>/bingo card</white> <muted>|</muted> <body>Abre tu cartilla"
   leave: "<white>/bingo leave</white> <muted>|</muted> <body>Sal de tu equipo"
   start: "<white>/bingo start <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
   stop: "<white>/bingo stop</white> <muted>|</muted> <body>Detén la ronda"
@@ -79,6 +80,7 @@ round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna cas
 claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)"
 
 # Card menu.
+menu-title: "<brand> <hl>Cartilla</hl>"
 card-opened: "<prefix><body>Aquí tienes tu cartilla."
 card-not-playing: "<prefix><err>No estás jugando esta ronda. Únete con <hl>/bingo join</hl>."
 menu-cell-unclaimed: "<muted>Sin reclamar</muted>"

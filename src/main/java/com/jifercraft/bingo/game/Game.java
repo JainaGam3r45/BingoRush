@@ -18,9 +18,11 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
 import org.bukkit.scheduler.BukkitTask;
@@ -35,6 +37,8 @@ public final class Game {
 
     private final BingoRush plugin;
     private final Teams teams;
+    private final CardMenu cardMenu;
+    private final NamespacedKey cardTag;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
@@ -48,6 +52,8 @@ public final class Game {
     public Game(BingoRush plugin, Teams teams) {
         this.plugin = plugin;
         this.teams = teams;
+        this.cardTag = new NamespacedKey(plugin, "card-menu");
+        this.cardMenu = new CardMenu(plugin, teams, cardTag);
     }
 
     public Round round() {
@@ -56,6 +62,27 @@ public final class Game {
 
     public Teams teams() {
         return teams;
+    }
+
+    /** True when the top inventory of a view is one of our card menus. */
+    public boolean isCardMenuView(InventoryView view) {
+        return cardMenu.isMenuItem(view.getTopInventory().getItem(0));
+    }
+
+    /** Opens the round card for a player, if they are on a team. */
+    public void openCard(Player player) {
+        Round current = round;
+        if (current == null) {
+            messages().send(player, "round-not-running");
+            return;
+        }
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            messages().send(player, "card-not-playing");
+            return;
+        }
+        cardMenu.open(player, current, team);
+        messages().send(player, "card-opened");
     }
 
     public void startRound(CommandSender caller, String seedArg) {

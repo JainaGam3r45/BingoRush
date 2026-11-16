@@ -32,6 +32,7 @@ Player commands:
 
 - `/bingo`: displays available commands and plugin help.
 - `/bingo join [team]`: joins a team, or the next available team if omitted (`bingo.play`).
+- `/bingo card`: opens the round card, with each cell showing who claimed it (`bingo.play`).
 - `/bingo leave`: leaves the current team (`bingo.play`).
 
 Admin commands (`bingo.admin`):

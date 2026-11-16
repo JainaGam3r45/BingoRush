@@ -5,6 +5,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 
@@ -32,8 +33,21 @@ public final class RoundListener implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent event) {
+        // The card menu is a read only view; the check is a tagged item in
+        // the first slot, which every opened menu always has.
+        if (game.isCardMenuView(event.getView())) {
+            event.setCancelled(true);
+            return;
+        }
         if (event.getWhoClicked() instanceof Player player) {
             game.checkClaims(player);
+        }
+    }
+
+    @EventHandler
+    public void onDrag(InventoryDragEvent event) {
+        if (game.isCardMenuView(event.getView())) {
+            event.setCancelled(true);
         }
     }
 
