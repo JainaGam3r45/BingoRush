@@ -1,0 +1,103 @@
+# BingoRush configuration.
+# Values the plugin reads are checked when it loads this file; mistakes are
+# printed to the console, one line each, naming the key to fix.
+
+# How a round is won: "full" fills the whole card, "line" completes one row,
+# column or diagonal.
+win-mode: full
+
+# Round time limit in seconds. When it runs out, the team with the most
+# claimed cells wins and an earlier last claim breaks a tie. 0 means no
+# clock: the round runs until a team completes the card.
+time-limit: 1800
+
+# Seconds between /bingo start and the round itself. 0 starts right away.
+countdown: 10
+
+# Players per team. 1 plays solo.
+team-size: 2
+
+# Empty every inventory when the round starts and give the contents back when
+# it ends. Stops players from bringing a pre-filled backpack.
+clear-inventories: true
+
+# Spread team members around the world spawn when the round starts, so
+# nobody spawns on top of the chests.
+scatter-players: true
+scatter-radius: 24
+
+# What a player who joins after the start gets: "join" puts them in a team,
+# "spectate" lets them watch the round.
+late-join: join
+
+# The 25 cells of the card come from these tiers. Each tier lists the items
+# it can draw from and how many cells it fills; the cells must add up to 25.
+# Item keys are namespaced, plain names mean minecraft:. The plugin checks
+# every key against the item registry when it loads this file and prints one
+# console error per entry that does not exist.
+card:
+  tiers:
+    easy:
+      cells: 10
+      items:
+        - minecraft:oak_log
+        - minecraft:birch_log
+        - minecraft:cobblestone
+        - minecraft:coal
+        - minecraft:wheat
+        - minecraft:carrot
+        - minecraft:potato
+        - minecraft:apple
+        - minecraft:string
+        - minecraft:stick
+        - minecraft:paper
+        - minecraft:egg
+        - minecraft:sugar_cane
+        - minecraft:pumpkin
+        - minecraft:clay_ball
+        - minecraft:flint
+    medium:
+      cells: 8
+      items:
+        - minecraft:iron_ingot
+        - minecraft:gold_ingot
+        - minecraft:redstone
+        - minecraft:lapis_lazuli
+        - minecraft:amethyst_shard
+        - minecraft:bone
+        - minecraft:gunpowder
+        - minecraft:slime_ball
+        - minecraft:honeycomb
+        - minecraft:leather
+        - minecraft:bread
+        - minecraft:cooked_beef
+        - minecraft:glass_bottle
+        - minecraft:bucket
+    hard:
+      cells: 5
+      items:
+        - minecraft:diamond
+        - minecraft:emerald
+        - minecraft:blaze_rod
+        - minecraft:ender_pearl
+        - minecraft:golden_carrot
+        - minecraft:cake
+        - minecraft:name_tag
+        - minecraft:saddle
+        - minecraft:experience_bottle
+    epic:
+      cells: 2
+      items:
+        - minecraft:netherite_ingot
+        - minecraft:totem_of_undying
+        - minecraft:elytra
+        - minecraft:heart_of_the_sea
+        - minecraft:nether_star
+
+# Vanilla sound keys played at each moment. An empty value plays nothing;
+# a key that does not exist is reported at load and then ignored.
+sounds:
+  claim: entity.experience_orb.pickup
+  win: ui.toast.challenge_complete
+  countdown: block.note_block.pling
+  start: block.beacon.activate
