@@ -30,6 +30,7 @@ tasks.compileJava {
     // just emit Java 25 bytecode. Switch to a toolchain once a real JDK 25 is installed.
     options.release = 25
     options.encoding = "UTF-8"
+    options.compilerArgs.add("-Xlint:deprecation")
 }
 
 tasks.processResources {

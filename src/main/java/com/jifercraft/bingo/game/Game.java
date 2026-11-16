@@ -8,6 +8,7 @@ import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
@@ -17,10 +18,12 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ItemType;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
@@ -36,6 +39,7 @@ public final class Game {
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
+    private BukkitTask sweepTask;
     // From /bingo reroll: the seed the next start uses unless one is given.
     private Long pendingSeed;
     private Round round;
@@ -254,6 +258,39 @@ public final class Game {
         }
     }
 
+    /**
+     * Claims every cell the player's team can claim from what they carry.
+     * Called from gameplay events and from the periodic sweep; claiming twice
+     * is harmless because the board ignores repeats.
+     */
+    public void checkClaims(Player player) {
+        Round current = round;
+        if (current == null || current.state() != Round.State.RUNNING) {
+            return;
+        }
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            return;
+        }
+        for (int cell = 0; cell < BingoCard.CELLS; cell++) {
+            if (current.board().isClaimed(cell, team.id())) {
+                continue;
+            }
+            Material material = materialFor(current, cell);
+            if (material != null && player.getInventory().contains(material)) {
+                claimCell(current, team, cell, player);
+            }
+        }
+    }
+
+    /** Gives back the items of a player who left during a round. */
+    public void restoreInventory(Player player) {
+        ItemStack[] contents = savedInventories.remove(player.getUniqueId());
+        if (contents != null) {
+            player.getInventory().setContents(contents);
+        }
+    }
+
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
         cancelTasks();
@@ -309,6 +346,9 @@ public final class Game {
         broadcast("round-started-chat");
         plugin.getLogger().info("Round started, seed " + round.seed());
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
+        // The events catch most claims, but /give and friends fire nothing,
+        // so every second the plugin looks at every team member's inventory.
+        sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::sweepClaims, 20, 20);
     }
 
     private void tickClock() {
@@ -351,6 +391,14 @@ public final class Game {
     private void cancelTasks() {
         cancelCountdown();
         cancelClock();
+        cancelSweep();
+    }
+
+    private void cancelSweep() {
+        if (sweepTask != null) {
+            sweepTask.cancel();
+            sweepTask = null;
+        }
     }
 
     private void cancelClock() {
@@ -358,6 +406,56 @@ public final class Game {
             clockTask.cancel();
             clockTask = null;
         }
+    }
+
+    private void sweepClaims() {
+        Round current = round;
+        if (current == null || current.state() != Round.State.RUNNING) {
+            return;
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            checkClaims(player);
+        }
+    }
+
+    private void claimCell(Round current, Team team, int cell, Player claimer) {
+        if (!current.board().claim(cell, team.id(), System.currentTimeMillis())) {
+            return;
+        }
+        String itemKey = current.card().item(cell);
+        ItemType type = roundConfig.itemType(itemKey);
+        // ItemType is a Translatable, so each player sees the item name in
+        // their own language, and the console log below has the raw key.
+        TagResolver item = Placeholder.component("item", type == null
+                ? Component.text(itemKey)
+                : Component.translatable(type));
+        int count = current.board().count(team.id());
+        broadcast("claim", item, teamPlaceholder(team),
+                Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+        plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
+                + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        // Only the team that just reached the win condition ends the round.
+        if (current.board().completedWinner().orElse(-1) == team.id()) {
+            winByCompletion(current, team);
+        }
+    }
+
+    private void winByCompletion(Round current, Team winner) {
+        String time = formatElapsed(current.elapsedMs());
+        broadcast("round-won-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
+        plugin.getLogger().info("Round won by " + winner.name() + " in " + time + ", seed " + current.seed());
+        endRound();
+    }
+
+    private Material materialFor(Round current, int cell) {
+        ItemType type = roundConfig.itemType(current.card().item(cell));
+        return type == null ? null : type.asMaterial();
+    }
+
+    private String formatElapsed(long ms) {
+        long seconds = ms / 1000;
+        return seconds / 60 + ":" + String.format(Locale.ROOT, "%02d", seconds % 60);
     }
 
     private void saveAndClearInventories() {
