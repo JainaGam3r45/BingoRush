@@ -1,0 +1,24 @@
+# Build output
+build/
+out/
+bin/
+
+# Gradle
+.gradle/
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+eclipse/
+
+# run-paper test server folder
+run/
+
+# Logs
+*.log
