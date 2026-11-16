@@ -40,6 +40,8 @@ public final class Hud {
     private static final String TIME_ENTRY = "time";
     private static final Duration TITLE_FADE = Duration.ofMillis(300);
     private static final Duration TITLE_STAY = Duration.ofSeconds(3);
+    private static final Duration COUNTDOWN_FADE_OUT = Duration.ofMillis(200);
+    private static final Duration COUNTDOWN_STAY = Duration.ofMillis(800);
     private static final float SOUND_VOLUME = 1.0f;
     private static final float SOUND_PITCH = 1.0f;
 
@@ -97,9 +99,60 @@ public final class Hud {
         play(BingoConfig.SoundId.CLAIM, onlineMembers(team));
     }
 
-    /** A pling for everyone on every countdown second. */
-    public void countdownTick() {
+    /** Countdown title on screen and a pling for everyone. */
+    public void countdownTick(int secondsLeft) {
+        Title title = Title.title(
+                plugin.messages().render("round-countdown-title",
+                        Placeholder.unparsed("count", String.valueOf(secondsLeft))),
+                Component.empty(),
+                Title.Times.times(Duration.ZERO, COUNTDOWN_STAY, COUNTDOWN_FADE_OUT));
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.showTitle(title);
+        }
         play(BingoConfig.SoundId.COUNTDOWN, Bukkit.getOnlinePlayers());
+    }
+
+    /** Pauses the clock and removes the boss bar from screens. */
+    public void pause() {
+        if (bossBar != null) {
+            for (Player player : participants()) {
+                bossBar.removeViewer(player);
+            }
+        }
+    }
+
+    /** Restores the boss bar on screen when the round resumes. */
+    public void resume() {
+        if (bossBar != null) {
+            for (Player player : participants()) {
+                bossBar.addViewer(player);
+            }
+            refresh();
+        }
+    }
+
+    /** Gives late joiners the round scoreboard and active boss bar. */
+    public void playerJoined(Player player) {
+        if (scoreboard != null) {
+            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
+            player.setScoreboard(scoreboard);
+        }
+        if (bossBar != null && game.round() != null && game.round().state() == Round.State.RUNNING) {
+            bossBar.addViewer(player);
+        }
+    }
+
+    /** Restores previous scoreboard when a player leaves their team. */
+    public void playerLeft(Player player) {
+        Scoreboard prev = previousScoreboards.remove(player.getUniqueId());
+        if (prev != null) {
+            player.setScoreboard(prev);
+        } else {
+            player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+        }
+        if (bossBar != null) {
+            bossBar.removeViewer(player);
+        }
     }
 
     /** A team completed the card or the line. */
@@ -133,7 +186,7 @@ public final class Hud {
         }
         previousScoreboards.clear();
         if (bossBar != null) {
-            for (Player player : participants()) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
                 bossBar.removeViewer(player);
             }
             bossBar = null;

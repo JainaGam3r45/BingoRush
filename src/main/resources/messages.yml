@@ -67,6 +67,7 @@ round-already-paused: "<prefix><err>La ronda ya está en pausa."
 round-not-paused: "<prefix><err>La ronda no está en pausa."
 round-config-broken: "<prefix><err>No se puede empezar: hay errores en config.yml. Mira la consola."
 round-countdown-chat: "<prefix><body>La ronda empieza en <hl><count></hl> <body>segundos."
+round-countdown-title: "<gradient:#FFD23F:#FF8A1F><b><count></b></gradient>"
 round-started-title: "<gradient:#FFD23F:#FF8A1F><b>¡Bingo!</b></gradient>"
 round-started-subtitle: "<body>¡Corre a por los objetos de tu cartilla!"
 round-started-chat: "<prefix><body>¡La ronda ha empezado! Abre tu cartilla con <hl>/bingo card</hl>."
@@ -85,6 +86,7 @@ round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna cas
 
 # Claims.
 claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)"
+claim-actionbar: "<ok>+ <item></ok> <body>reclamado <muted>(<count>/<total>)</muted>"
 
 # Card menu.
 menu-title: "<brand> <hl>Cartilla</hl>"

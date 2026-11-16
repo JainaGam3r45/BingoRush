@@ -120,6 +120,7 @@ public final class Game {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
             plugin.getLogger().info("Countdown of " + total + "s started, seed " + seed);
             secondsLeft = total;
+            hud.countdownTick(secondsLeft);
             countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCountdown, 20, 20);
         } else {
             beginRun();
@@ -147,6 +148,7 @@ public final class Game {
             case RUNNING -> {
                 round.pause();
                 cancelClock();
+                hud.pause();
                 broadcast("round-paused");
             }
         }
@@ -162,6 +164,7 @@ public final class Game {
             return;
         }
         round.resume();
+        hud.resume();
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
         broadcast("round-resumed");
     }
@@ -222,6 +225,7 @@ public final class Game {
         if (current != null) {
             // Joined during the countdown or a round that allows late play.
             giveCardItem(player);
+            hud.playerJoined(player);
         }
     }
 
@@ -233,6 +237,10 @@ public final class Game {
         }
         team.remove(player.getUniqueId());
         messages().send(player, "team-left");
+        if (round != null) {
+            hud.playerLeft(player);
+            removeCardItems(player);
+        }
     }
 
     public void createTeam(CommandSender caller, String name, TextColor color) {
@@ -467,11 +475,12 @@ public final class Game {
             cancelCountdown();
             return;
         }
-        hud.countdownTick();
         secondsLeft--;
         if (secondsLeft <= 0) {
             cancelCountdown();
             beginRun();
+        } else {
+            hud.countdownTick(secondsLeft);
         }
     }
 
@@ -591,6 +600,15 @@ public final class Game {
         broadcast("claim", item, teamPlaceholder(team),
                 Placeholder.unparsed("count", String.valueOf(count)),
                 Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+        Component bar = messages().render("claim-actionbar", item,
+                Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+        for (UUID memberId : team.members()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null) {
+                member.sendActionBar(bar);
+            }
+        }
         plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
                 + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
         hud.claimHappened(team);
