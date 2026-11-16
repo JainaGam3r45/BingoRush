@@ -115,3 +115,10 @@ sounds:
   win: ui.toast.challenge_complete
   countdown: block.note_block.pling
   start: block.beacon.activate
+
+# Update notifications from the GitHub repository.
+# Checks run asynchronously in the background so they never slow down the server.
+update-notifier:
+  enabled: true
+  on-join: true
+

@@ -69,8 +69,8 @@ round-resumed: "<prefix><body>La ronda continúa."
 reroll-done: "<prefix><body>Nueva cartilla preparada con la semilla <hl><seed></hl>."
 reloaded: "<prefix><body>Configuración recargada."
 round-won-title: "<gradient:#FFD23F:#FF8A1F><b>¡<team> gana!</b></gradient>"
-round-won-subtitle: "<body>Cartilla completa en <hl><time></hl>"
-round-won-chat: "<prefix><body>¡El equipo <team><body> ha completado la cartilla!"
+round-won-subtitle: "<body>Ronda ganada en <hl><time></hl>"
+round-won-chat: "<prefix><body>¡El equipo <team><body> gana la ronda en <hl><time></hl><body>!"
 round-time-up-title: "<gradient:#FF6B6B:#FF2E2E><b>¡Tiempo!</b></gradient>"
 round-time-up-chat: "<prefix><body>Se acabó el tiempo. Gana el equipo <team><body> con <hl><count></hl> <body>casillas."
 round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna casilla."
@@ -91,3 +91,7 @@ late-join-spectate: "<prefix><body>La ronda ya empezó: la miras como espectador
 # Interface text.
 sidebar-title: "<brand>"
 bossbar-title: "<brand> <body>Quedan <hl><time></hl>"
+
+# Updates.
+update-available: "<prefix><body>Hay una nueva versión disponible: <ok>v<latest></ok> <body>(actual: <muted>v<current></muted>). Descárgala en <hl><click:open_url:'<url>'><url></click></hl>"
+

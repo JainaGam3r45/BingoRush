@@ -13,3 +13,7 @@ permissions:
   bingo.admin:
     description: Lets the player start, stop and configure bingo rounds.
     default: op
+  bingo.update:
+    description: Receives a notification when a new version is available.
+    default: op
+

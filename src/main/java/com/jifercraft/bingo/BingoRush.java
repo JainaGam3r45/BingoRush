@@ -4,7 +4,9 @@ import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.game.BingoCommand;
 import com.jifercraft.bingo.game.Game;
+import com.jifercraft.bingo.game.RoundListener;
 import com.jifercraft.bingo.game.Teams;
+import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -14,6 +16,7 @@ public final class BingoRush extends JavaPlugin {
     private BingoConfig bingoConfig;
     private Teams teams;
     private Game game;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onEnable() {
@@ -25,8 +28,16 @@ public final class BingoRush extends JavaPlugin {
             teams.reset(bingoConfig.teamDefinitions());
         }
         game = new Game(this, teams);
+        getServer().getPluginManager().registerEvents(new RoundListener(game), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(new BingoCommand(this, game).build()));
+
+        updateChecker = new UpdateChecker(this);
+        getServer().getPluginManager().registerEvents(updateChecker, this);
+        if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {
+            updateChecker.check();
+        }
+
         getLogger().info("BingoRush enabled");
     }
 
@@ -47,6 +58,10 @@ public final class BingoRush extends JavaPlugin {
         return bingoConfig;
     }
 
+    public UpdateChecker updateChecker() {
+        return updateChecker;
+    }
+
     /**
      * Rereads both files. A broken config keeps the previous one and prints
      * every problem to the console, so the round in progress is never lost
@@ -56,6 +71,9 @@ public final class BingoRush extends JavaPlugin {
         reloadConfig();
         messages.reload();
         loadConfigOrLog();
+        if (updateChecker != null && (bingoConfig == null || bingoConfig.updateNotifierEnabled())) {
+            updateChecker.check();
+        }
     }
 
     private void loadConfigOrLog() {

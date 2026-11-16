@@ -53,11 +53,13 @@ public final class BingoConfig {
     private final Map<String, ItemType> itemsByKey;
     private final Map<SoundId, Key> sounds;
     private final List<TeamDefinition> teamDefinitions;
+    private final boolean updateNotifierEnabled;
+    private final boolean updateNotifierOnJoin;
 
     private BingoConfig(WinMode winMode, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, Map<String, ItemType> itemsByKey, Map<SoundId, Key> sounds,
-            List<TeamDefinition> teamDefinitions) {
+            List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin) {
         this.winMode = winMode;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
@@ -70,6 +72,8 @@ public final class BingoConfig {
         this.itemsByKey = itemsByKey;
         this.sounds = sounds;
         this.teamDefinitions = teamDefinitions;
+        this.updateNotifierEnabled = updateNotifierEnabled;
+        this.updateNotifierOnJoin = updateNotifierOnJoin;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -197,11 +201,15 @@ public final class BingoConfig {
             teamDefinitions.add(new TeamDefinition(name.toString(), color.value()));
         }
 
+        boolean updateNotifierEnabled = yaml.getBoolean("update-notifier.enabled", true);
+        boolean updateNotifierOnJoin = yaml.getBoolean("update-notifier.on-join", true);
+
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
         return new BingoConfig(winMode, timeLimit, countdown, teamSize, clearInventories,
-                scatterPlayers, scatterRadius, lateJoin, pool, types, sounds, teamDefinitions);
+                scatterPlayers, scatterRadius, lateJoin, pool, types, sounds, teamDefinitions,
+                updateNotifierEnabled, updateNotifierOnJoin);
     }
 
     public WinMode winMode() {
@@ -253,5 +261,13 @@ public final class BingoConfig {
     /** The teams from config.yml, in order. Empty when the admin wants them made on the fly. */
     public List<TeamDefinition> teamDefinitions() {
         return teamDefinitions;
+    }
+
+    public boolean updateNotifierEnabled() {
+        return updateNotifierEnabled;
+    }
+
+    public boolean updateNotifierOnJoin() {
+        return updateNotifierOnJoin;
     }
 }

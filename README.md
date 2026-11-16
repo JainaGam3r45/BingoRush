@@ -48,6 +48,7 @@ Admin commands (`bingo.admin`):
 
 - `bingo.play`: allows joining teams and playing the game (default: true).
 - `bingo.admin`: allows starting, stopping and configuring rounds (default: op).
+- `bingo.update`: receives update notifications on join when a new version is available (default: op).
 
 ## Configuration
 
