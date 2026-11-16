@@ -1,6 +1,7 @@
 package com.jifercraft.bingo;
 
 import com.jifercraft.bingo.config.BingoConfig;
+import com.jifercraft.bingo.config.ConfigUpdater;
 import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.game.BingoCommand;
 import com.jifercraft.bingo.game.Game;
@@ -8,6 +9,7 @@ import com.jifercraft.bingo.game.RoundListener;
 import com.jifercraft.bingo.game.Teams;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import java.io.File;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BingoRush extends JavaPlugin {
@@ -20,7 +22,12 @@ public final class BingoRush extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
+        File configFile = new File(getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            saveDefaultConfig();
+        } else {
+            ConfigUpdater.update(this, "config.yml");
+        }
         messages = new Messages(this);
         loadConfigOrLog();
         teams = new Teams();
@@ -68,6 +75,7 @@ public final class BingoRush extends JavaPlugin {
      * over a typo. The teams are runtime state and survive a reload.
      */
     public void reloadSettings() {
+        ConfigUpdater.update(this, "config.yml");
         reloadConfig();
         messages.reload();
         loadConfigOrLog();

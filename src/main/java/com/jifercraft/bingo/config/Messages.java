@@ -1,9 +1,6 @@
 package com.jifercraft.bingo.config;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -45,18 +42,10 @@ public final class Messages {
         File file = new File(plugin.getDataFolder(), "messages.yml");
         if (!file.exists()) {
             plugin.saveResource("messages.yml", false);
+        } else {
+            ConfigUpdater.update(plugin, "messages.yml");
         }
         yaml = YamlConfiguration.loadConfiguration(file);
-        // New keys from the bundled file land in the admin's copy instead of
-        // rendering as raw key names after an update.
-        InputStreamReader bundled = new InputStreamReader(plugin.getResource("messages.yml"), StandardCharsets.UTF_8);
-        yaml.setDefaults(YamlConfiguration.loadConfiguration(bundled));
-        yaml.options().copyDefaults(true);
-        try {
-            yaml.save(file);
-        } catch (IOException e) {
-            plugin.getLogger().warning("Could not update messages.yml: " + e.getMessage());
-        }
 
         colors.clear();
         warned.clear();
