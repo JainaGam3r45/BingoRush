@@ -84,11 +84,18 @@ public final class CardMenu {
     }
 
     private ItemStack cellItem(Round round, Team viewer, int cell) {
-        ItemType type = plugin.bingoConfig().itemType(round.card().item(cell));
+        String itemKey = round.card().item(cell);
+        ItemType type = plugin.bingoConfig().itemType(itemKey);
         ItemStack stack = (type == null ? ItemType.BARRIER : type).createItemStack();
         ClaimBoard board = round.board();
+        String tierId = plugin.bingoConfig().pool().tierOf(itemKey);
+        boolean own = board.claimers(cell).contains(viewer.id());
         stack.editMeta(meta -> {
             List<Component> lore = new ArrayList<>();
+            if (tierId != null) {
+                lore.add(messages.render("menu-cell-tier",
+                        Placeholder.unparsed("tier", tierId)));
+            }
             List<Integer> claimers = board.claimers(cell);
             if (claimers.isEmpty()) {
                 lore.add(messages.render("menu-cell-unclaimed"));
@@ -99,7 +106,7 @@ public final class CardMenu {
                         lore.add(messages.render("menu-claimed-by", Game.teamPlaceholder(claimer)));
                     }
                 }
-                if (claimers.contains(viewer.id())) {
+                if (own) {
                     long claimedAt = board.claimTime(cell, viewer.id());
                     lore.add(messages.render("menu-claimed-at",
                             Placeholder.unparsed("time", CLOCK.format(
@@ -107,6 +114,9 @@ public final class CardMenu {
                 }
             }
             meta.lore(lore);
+            // The viewer's own claims glow; rival claims stay dull, so the
+            // state reads at a glance before the lore.
+            meta.setEnchantmentGlintOverride(own ? Boolean.TRUE : Boolean.FALSE);
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
         });
         return stack;

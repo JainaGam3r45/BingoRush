@@ -1,7 +1,9 @@
 package com.jifercraft.bingo.card;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -12,6 +14,9 @@ import java.util.Set;
 public final class ItemPool {
 
     private final List<ItemTier> tiers;
+    // Item key to the id of the tier that gets to claim it. Items keep the
+    // first tier that lists them, matching the rule in the constructor.
+    private final Map<String, String> tierByItem = new HashMap<>();
 
     public ItemPool(List<ItemTier> tiers) {
         List<ItemTier> copy = List.copyOf(tiers);
@@ -50,6 +55,9 @@ public final class ItemPool {
                         + " of its items already belong to an earlier tier");
             }
             claimedByEarlierTiers.addAll(tier.items());
+            for (String item : tier.items()) {
+                tierByItem.putIfAbsent(item, tier.id());
+            }
             total += tier.cells();
         }
         if (total != BingoCard.CELLS) {
@@ -60,5 +68,10 @@ public final class ItemPool {
 
     public List<ItemTier> tiers() {
         return tiers;
+    }
+
+    /** The tier id an item belongs to, or null when no tier lists it. */
+    public String tierOf(String item) {
+        return tierByItem.get(item);
     }
 }

@@ -90,6 +90,7 @@ claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(
 menu-title: "<brand> <hl>Cartilla</hl>"
 card-opened: "<prefix><body>Aquí tienes tu cartilla."
 card-not-playing: "<prefix><err>No estás jugando esta ronda. Únete con <hl>/bingo join</hl>."
+menu-cell-tier: "<muted>Nivel:</muted> <hl><tier></hl>"
 menu-cell-unclaimed: "<muted>Sin reclamar</muted>"
 menu-claimed-by: "<body>Conseguida por <team>"
 menu-claimed-at: "<muted>a las <time>"
