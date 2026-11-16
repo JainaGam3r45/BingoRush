@@ -85,7 +85,7 @@ round-time-up-chat: "<prefix><body>Se acabó el tiempo. Gana el equipo <team><bo
 round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna casilla."
 
 # Claims.
-claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)"
+claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)</muted>"
 claim-actionbar: "<ok>+ <item></ok> <body>reclamado <muted>(<count>/<total>)</muted>"
 
 # Card menu.
@@ -106,6 +106,7 @@ card-item-lore: "<body>Clic derecho para ver tus casillas."
 
 # Interface text.
 sidebar-title: "<brand>"
+sidebar-time: "<hl>Tiempo <time></hl>"
 bossbar-title: "<brand> <body>Quedan <hl><time></hl>"
 
 # Updates.

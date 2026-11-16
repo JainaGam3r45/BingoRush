@@ -201,8 +201,8 @@ public final class Hud {
         }
         long remainingMs = game.round().remainingMs(limitSeconds);
         Score time = sidebar.getScore(TIME_ENTRY);
-        time.customName(Component.text("Tiempo " + Game.clock(remainingMs),
-                plugin.messages().color("hl")));
+        time.customName(plugin.messages().render("sidebar-time",
+                Placeholder.unparsed("time", Game.clock(remainingMs))));
         time.setScore(TIME_SCORE);
         int score = FIRST_TEAM_SCORE;
         for (Team team : game.teams().all()) {
