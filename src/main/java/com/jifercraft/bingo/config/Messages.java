@@ -105,6 +105,14 @@ public final class Messages {
         }
     }
 
+    /**
+     * A message rendered and flattened to plain text, for the places a plain
+     * string is needed, such as a team name the plugin invents.
+     */
+    public String plainText(String key, TagResolver... placeholders) {
+        return PlainTextComponentSerializer.plainText().serialize(render(key, placeholders));
+    }
+
     /** A palette color for hand-built interface text, such as the sidebar. */
     public TextColor color(String name) {
         return colors.get(name);

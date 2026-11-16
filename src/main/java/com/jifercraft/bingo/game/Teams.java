@@ -10,7 +10,8 @@ import net.kyori.adventure.text.format.TextColor;
 /**
  * Every team of the event, in creation order. Team ids match their index, so
  * a removed team renumbers the ones after it; that is only allowed while no
- * round is running, because the claim board knows teams by id.
+ * round is running, because the claim board knows teams by id. The size cap
+ * is not stored here: it comes from the live config on every check.
  */
 public final class Teams {
 
@@ -20,12 +21,7 @@ public final class Teams {
             NamedTextColor.AQUA, NamedTextColor.BLUE, NamedTextColor.LIGHT_PURPLE, NamedTextColor.WHITE,
     };
 
-    private final int maxSize;
     private final List<Team> teams = new ArrayList<>();
-
-    public Teams(int maxSize) {
-        this.maxSize = maxSize;
-    }
 
     /** Replaces the teams with the configured ones. Only call while no round is running. */
     public void reset(List<TeamDefinition> definitions) {
@@ -78,12 +74,8 @@ public final class Teams {
         return List.copyOf(teams);
     }
 
-    public int maxSize() {
-        return maxSize;
-    }
-
     /** The team with room and the fewest players, or null when every team is full. */
-    public Team withRoom() {
+    public Team withRoom(int maxSize) {
         Team best = null;
         for (Team team : teams) {
             if (team.size() >= maxSize) {

@@ -1,0 +1,424 @@
+package com.jifercraft.bingo.game;
+
+import com.jifercraft.bingo.BingoRush;
+import com.jifercraft.bingo.card.BingoCard;
+import com.jifercraft.bingo.card.CardGenerator;
+import com.jifercraft.bingo.card.ClaimBoard;
+import com.jifercraft.bingo.config.BingoConfig;
+import com.jifercraft.bingo.config.LateJoin;
+import com.jifercraft.bingo.config.Messages;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
+
+/**
+ * Owns the current round: starting it, the countdown, the clock, pause,
+ * stop, and team changes. One round at a time; a null round is the lobby.
+ * The config a round started with is kept for that whole round, so a reload
+ * in the middle cannot pull the rules under the players' feet.
+ */
+public final class Game {
+
+    private final BingoRush plugin;
+    private final Teams teams;
+    private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
+    private BukkitTask countdownTask;
+    private BukkitTask clockTask;
+    // From /bingo reroll: the seed the next start uses unless one is given.
+    private Long pendingSeed;
+    private Round round;
+    private BingoConfig roundConfig;
+    private int secondsLeft;
+
+    public Game(BingoRush plugin, Teams teams) {
+        this.plugin = plugin;
+        this.teams = teams;
+    }
+
+    public Round round() {
+        return round;
+    }
+
+    public Teams teams() {
+        return teams;
+    }
+
+    public void startRound(CommandSender caller, String seedArg) {
+        if (round != null) {
+            messages().send(caller, "round-already-running");
+            return;
+        }
+        BingoConfig config = plugin.bingoConfig();
+        if (config == null) {
+            messages().send(caller, "round-config-broken");
+            return;
+        }
+        long seed = seedArg != null && !seedArg.isBlank()
+                ? CardGenerator.seedFrom(seedArg)
+                : nextSeed();
+        BingoCard card;
+        try {
+            card = new CardGenerator(config.pool()).generate(seed);
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().severe("The card could not be generated: " + e.getMessage());
+            messages().send(caller, "round-config-broken");
+            return;
+        }
+        roundConfig = config;
+        round = new Round(seed, card, new ClaimBoard(config.winMode()));
+        int total = config.countdownSeconds();
+        if (total > 0) {
+            broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
+            plugin.getLogger().info("Countdown of " + total + "s started, seed " + seed);
+            secondsLeft = total;
+            countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCountdown, 20, 20);
+        } else {
+            beginRun();
+        }
+    }
+
+    public void stopRound(CommandSender caller) {
+        if (round == null) {
+            messages().send(caller, "round-not-running");
+            return;
+        }
+        plugin.getLogger().info("Round stopped by " + caller.getName() + ", seed " + round.seed());
+        broadcast("round-stopped");
+        endRound();
+    }
+
+    public void pauseRound(CommandSender caller) {
+        if (round == null) {
+            messages().send(caller, "round-not-running");
+            return;
+        }
+        switch (round.state()) {
+            case COUNTDOWN -> messages().send(caller, "round-not-started");
+            case PAUSED -> messages().send(caller, "round-already-paused");
+            case RUNNING -> {
+                round.pause();
+                cancelClock();
+                broadcast("round-paused");
+            }
+        }
+    }
+
+    public void resumeRound(CommandSender caller) {
+        if (round == null) {
+            messages().send(caller, "round-not-running");
+            return;
+        }
+        if (round.state() != Round.State.PAUSED) {
+            messages().send(caller, "round-not-paused");
+            return;
+        }
+        round.resume();
+        clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
+        broadcast("round-resumed");
+    }
+
+    public void rerollCard(CommandSender caller) {
+        if (round != null) {
+            messages().send(caller, "round-already-running");
+            return;
+        }
+        pendingSeed = new Random().nextLong();
+        messages().send(caller, "reroll-done", Placeholder.unparsed("seed", Long.toString(pendingSeed)));
+        plugin.getLogger().info("Next card rerolled, seed " + pendingSeed);
+    }
+
+    public void joinTeam(Player player, String teamName) {
+        BingoConfig config = plugin.bingoConfig();
+        Round current = round;
+        if (current != null && current.state() != Round.State.COUNTDOWN
+                && config != null && config.lateJoin() == LateJoin.SPECTATE) {
+            messages().send(player, "late-join-spectate");
+            return;
+        }
+        Team currentTeam = teams.of(player.getUniqueId());
+        if (currentTeam != null) {
+            messages().send(player, "team-already-in", teamPlaceholder(currentTeam));
+            return;
+        }
+        Team target;
+        if (teamName != null) {
+            target = teams.byName(teamName);
+            if (target == null) {
+                messages().send(player, "team-not-found", Placeholder.unparsed("name", teamName));
+                return;
+            }
+        } else if (teams.all().isEmpty()) {
+            // No configured teams: make one up so a quick game needs no setup.
+            String name = messages().plainText("team-auto-name",
+                    Placeholder.unparsed("count", String.valueOf(teams.all().size() + 1)));
+            target = teams.createAuto(name, teams.all().size());
+        } else {
+            target = teams.withRoom(cap(config));
+            if (target == null) {
+                messages().send(player, "team-all-full");
+                return;
+            }
+        }
+        if (target.size() >= cap(config)) {
+            messages().send(player, "team-full", teamPlaceholder(target));
+            return;
+        }
+        target.add(player.getUniqueId());
+        messages().send(player, "team-joined", teamPlaceholder(target));
+    }
+
+    public void leaveTeam(Player player) {
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            messages().send(player, "team-not-in");
+            return;
+        }
+        team.remove(player.getUniqueId());
+        messages().send(player, "team-left");
+    }
+
+    public void createTeam(CommandSender caller, String name, TextColor color) {
+        try {
+            Team team = teams.create(name, color);
+            messages().send(caller, "team-created", teamPlaceholder(team));
+        } catch (IllegalArgumentException e) {
+            messages().send(caller, "team-name-taken", Placeholder.unparsed("name", name));
+        }
+    }
+
+    public void removeTeam(CommandSender caller, String name) {
+        if (round != null) {
+            messages().send(caller, "teams-locked");
+            return;
+        }
+        Team team = teams.byName(name);
+        if (team == null) {
+            messages().send(caller, "team-not-found", Placeholder.unparsed("name", name));
+            return;
+        }
+        teams.remove(team);
+        messages().send(caller, "team-removed", teamPlaceholder(team));
+    }
+
+    public void assignPlayer(CommandSender caller, Player target, String teamName) {
+        Team team = teams.byName(teamName);
+        if (team == null) {
+            messages().send(caller, "team-not-found", Placeholder.unparsed("name", teamName));
+            return;
+        }
+        Team old = teams.of(target.getUniqueId());
+        if (old == team) {
+            messages().send(caller, "team-already-there",
+                    Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
+            return;
+        }
+        if (old != null) {
+            old.remove(target.getUniqueId());
+        }
+        team.add(target.getUniqueId());
+        messages().send(caller, "team-assigned",
+                Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
+        messages().send(target, "team-joined", teamPlaceholder(team));
+    }
+
+    public void clearTeams(CommandSender caller) {
+        for (Team team : teams.all()) {
+            for (UUID member : team.members()) {
+                team.remove(member);
+            }
+        }
+        messages().send(caller, "team-cleared");
+    }
+
+    public void listTeams(CommandSender caller) {
+        messages().send(caller, "team-list-header");
+        BingoConfig config = plugin.bingoConfig();
+        int cap = cap(config);
+        for (Team team : teams.all()) {
+            messages().send(caller, "team-list-entry",
+                    teamPlaceholder(team),
+                    Placeholder.unparsed("count", String.valueOf(team.size())),
+                    Placeholder.unparsed("max", String.valueOf(cap)));
+        }
+    }
+
+    /** Undoes everything a running round did, for the plugin shutting down. */
+    public void shutdown() {
+        cancelTasks();
+        restoreInventories();
+        round = null;
+        roundConfig = null;
+    }
+
+    private long nextSeed() {
+        if (pendingSeed != null) {
+            long seed = pendingSeed;
+            pendingSeed = null;
+            return seed;
+        }
+        return new Random().nextLong();
+    }
+
+    private int cap(BingoConfig config) {
+        return config == null ? Integer.MAX_VALUE : config.teamSize();
+    }
+
+    private void tickCountdown() {
+        if (round == null) {
+            cancelCountdown();
+            return;
+        }
+        secondsLeft--;
+        if (secondsLeft <= 0) {
+            cancelCountdown();
+            beginRun();
+        }
+    }
+
+    private void cancelCountdown() {
+        if (countdownTask != null) {
+            countdownTask.cancel();
+            countdownTask = null;
+        }
+    }
+
+    private void beginRun() {
+        if (round == null) {
+            return;
+        }
+        round.beginRun();
+        if (roundConfig.clearInventories()) {
+            saveAndClearInventories();
+            broadcast("round-cleared-inventories");
+        }
+        if (roundConfig.scatterPlayers()) {
+            scatterTeams();
+        }
+        broadcast("round-started-chat");
+        plugin.getLogger().info("Round started, seed " + round.seed());
+        clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
+    }
+
+    private void tickClock() {
+        Round current = round;
+        if (current == null || current.state() != Round.State.RUNNING) {
+            return;
+        }
+        long remaining = current.remainingMs(roundConfig.timeLimitSeconds());
+        if (remaining <= 0) {
+            finishByTimeout();
+        }
+    }
+
+    private void finishByTimeout() {
+        Round current = round;
+        if (current == null) {
+            return;
+        }
+        Team winner = teams.byId(current.board().leader().orElse(-1));
+        if (winner == null) {
+            broadcast("round-no-claims");
+            plugin.getLogger().info("Round timed out with no claims, seed " + current.seed());
+        } else {
+            broadcast("round-time-up-chat",
+                    teamPlaceholder(winner),
+                    Placeholder.unparsed("count", String.valueOf(current.board().count(winner.id()))));
+            plugin.getLogger().info("Round timed out, winner: " + winner.name() + ", seed " + current.seed());
+        }
+        endRound();
+    }
+
+    /** The round is over: everything back to the lobby. */
+    private void endRound() {
+        cancelTasks();
+        restoreInventories();
+        round = null;
+        roundConfig = null;
+    }
+
+    private void cancelTasks() {
+        cancelCountdown();
+        cancelClock();
+    }
+
+    private void cancelClock() {
+        if (clockTask != null) {
+            clockTask.cancel();
+            clockTask = null;
+        }
+    }
+
+    private void saveAndClearInventories() {
+        for (Team team : teams.all()) {
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member == null) {
+                    continue;
+                }
+                savedInventories.put(memberId, member.getInventory().getContents());
+                member.getInventory().clear();
+            }
+        }
+    }
+
+    private void restoreInventories() {
+        for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player != null) {
+                player.getInventory().setContents(entry.getValue());
+            }
+        }
+        savedInventories.clear();
+    }
+
+    // One spot per team around the world spawn, so teams start apart but
+    // together, and no member stacks on another.
+    private void scatterTeams() {
+        World world = Bukkit.getWorlds().getFirst();
+        Location spawn = world.getSpawnLocation();
+        Random random = new Random();
+        for (Team team : teams.all()) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            double distance = Math.sqrt(random.nextDouble()) * roundConfig.scatterRadius();
+            int x = spawn.getBlockX() + (int) Math.round(Math.cos(angle) * distance);
+            int z = spawn.getBlockZ() + (int) Math.round(Math.sin(angle) * distance);
+            Location spot = world.getHighestBlockAt(x, z).getLocation().add(0.5, 1, 0.5);
+            int offset = 0;
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member == null) {
+                    continue;
+                }
+                member.teleport(spot.clone().add(offset % 3, 0, offset / 3));
+                offset++;
+            }
+        }
+    }
+
+    private void broadcast(String key, TagResolver... placeholders) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            messages().send(player, key, placeholders);
+        }
+        messages().send(Bukkit.getConsoleSender(), key, placeholders);
+    }
+
+    static TagResolver teamPlaceholder(Team team) {
+        return Placeholder.component("team", Component.text(team.name(), team.color()));
+    }
+
+    private Messages messages() {
+        return plugin.messages();
+    }
+}
