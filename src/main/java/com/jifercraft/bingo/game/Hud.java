@@ -5,17 +5,22 @@ import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.config.BingoConfig;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -34,10 +39,6 @@ import org.bukkit.scoreboard.Scoreboard;
  */
 public final class Hud {
 
-    // Sidebar lines are ordered by score, highest at the top.
-    private static final int TIME_SCORE = 1000;
-    private static final int FIRST_TEAM_SCORE = 990;
-    private static final String TIME_ENTRY = "time";
     private static final Duration TITLE_FADE = Duration.ofMillis(300);
     private static final Duration TITLE_STAY = Duration.ofSeconds(3);
     private static final Duration COUNTDOWN_FADE_OUT = Duration.ofMillis(200);
@@ -54,6 +55,7 @@ public final class Hud {
     private long totalMs;
     private long limitSeconds;
     private final Map<UUID, Scoreboard> previousScoreboards = new HashMap<>();
+    private final Set<String> activeEntries = new HashSet<>();
 
     public Hud(BingoRush plugin, Game game) {
         this.plugin = plugin;
@@ -64,15 +66,16 @@ public final class Hud {
     public void roundStarted(long timeLimitSeconds) {
         limitSeconds = timeLimitSeconds;
         totalMs = timeLimitSeconds * 1000;
+        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+        sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY,
+                plugin.messages().render("sidebar-title"));
+        sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
+        sidebar.numberFormat(NumberFormat.blank());
+        for (Player player : participants()) {
+            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
+            player.setScoreboard(scoreboard);
+        }
         if (timeLimitSeconds > 0) {
-            scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-            sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY,
-                    plugin.messages().render("sidebar-title"));
-            sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
-            for (Player player : participants()) {
-                previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
-                player.setScoreboard(scoreboard);
-            }
             bossBar = BossBar.bossBar(Component.empty(), 1.0f, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
             for (Player player : participants()) {
                 bossBar.addViewer(player);
@@ -185,6 +188,7 @@ public final class Hud {
             }
         }
         previousScoreboards.clear();
+        activeEntries.clear();
         if (bossBar != null) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 bossBar.removeViewer(player);
@@ -200,21 +204,43 @@ public final class Hud {
             return;
         }
         long remainingMs = game.round().remainingMs(limitSeconds);
-        Score time = sidebar.getScore(TIME_ENTRY);
-        time.customName(plugin.messages().render("sidebar-time",
-                Placeholder.unparsed("time", Game.clock(remainingMs))));
-        time.setScore(TIME_SCORE);
-        int score = FIRST_TEAM_SCORE;
-        for (Team team : game.teams().all()) {
-            Score line = sidebar.getScore("team-" + team.id());
-            line.customName(Component.text()
-                    .append(Component.text(team.name() + " ", team.color()))
-                    .append(Component.text(game.round().board().count(team.id()) + "/" + BingoCard.CELLS,
-                            plugin.messages().color("muted")))
-                    .build());
-            line.setScore(score);
-            score--;
+        String timeStr = limitSeconds <= 0 ? Game.clock(game.round().elapsedMs()) : Game.clock(remainingMs);
+
+        record SidebarLine(String entry, Component component) {
         }
+        List<SidebarLine> lines = new ArrayList<>();
+        lines.add(new SidebarLine("sep1", plugin.messages().render("sidebar-separator")));
+        lines.add(new SidebarLine("time", plugin.messages().render("sidebar-time",
+                Placeholder.unparsed("time", timeStr))));
+        lines.add(new SidebarLine("blank1", Component.empty()));
+        lines.add(new SidebarLine("teams_header", plugin.messages().render("sidebar-teams-header")));
+        for (Team team : game.teams().all()) {
+            lines.add(new SidebarLine("team-" + team.id(), plugin.messages().render("sidebar-team-entry",
+                    TagResolver.resolver("color", Tag.styling(team.color())),
+                    Game.teamPlaceholder(team),
+                    Placeholder.unparsed("count", String.valueOf(game.round().board().count(team.id()))),
+                    Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)))));
+        }
+        lines.add(new SidebarLine("blank2", Component.empty()));
+        lines.add(new SidebarLine("sep2", plugin.messages().render("sidebar-separator")));
+        lines.add(new SidebarLine("footer", plugin.messages().render("sidebar-footer")));
+
+        Set<String> currentEntries = new HashSet<>();
+        int score = lines.size();
+        for (SidebarLine line : lines) {
+            currentEntries.add(line.entry());
+            Score s = sidebar.getScore(line.entry());
+            s.customName(line.component());
+            s.setScore(score--);
+        }
+        for (String old : activeEntries) {
+            if (!currentEntries.contains(old)) {
+                scoreboard.resetScores(old);
+            }
+        }
+        activeEntries.clear();
+        activeEntries.addAll(currentEntries);
+
         if (bossBar == null) {
             return;
         }
