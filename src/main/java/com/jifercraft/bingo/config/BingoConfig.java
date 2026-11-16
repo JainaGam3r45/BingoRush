@@ -173,7 +173,13 @@ public final class BingoConfig {
                 continue;
             }
             try {
-                sounds.put(id, Key.key(raw.toLowerCase(Locale.ROOT)));
+                Key key = Key.key(raw.toLowerCase(Locale.ROOT));
+                NamespacedKey namespaced = new NamespacedKey(key.namespace(), key.value());
+                if (RegistryAccess.registryAccess().getRegistry(RegistryKey.SOUND_EVENT).get(namespaced) == null) {
+                    problems.add("sounds." + id.configKey() + " is '" + raw + "', which is not a sound key");
+                    continue;
+                }
+                sounds.put(id, key);
             } catch (InvalidKeyException e) {
                 problems.add("sounds." + id.configKey() + " is '" + raw + "', which is not a sound key");
             }

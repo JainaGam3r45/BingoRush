@@ -39,6 +39,7 @@ public final class Game {
     private final Teams teams;
     private final CardMenu cardMenu;
     private final NamespacedKey cardTag;
+    private final Hud hud;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
@@ -54,6 +55,7 @@ public final class Game {
         this.teams = teams;
         this.cardTag = new NamespacedKey(plugin, "card-menu");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
+        this.hud = new Hud(plugin, this);
     }
 
     public Round round() {
@@ -324,6 +326,7 @@ public final class Game {
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
         cancelTasks();
+        hud.hideAll();
         restoreInventories();
         round = null;
         roundConfig = null;
@@ -347,6 +350,7 @@ public final class Game {
             cancelCountdown();
             return;
         }
+        hud.countdownTick();
         secondsLeft--;
         if (secondsLeft <= 0) {
             cancelCountdown();
@@ -375,6 +379,7 @@ public final class Game {
         }
         broadcast("round-started-chat");
         plugin.getLogger().info("Round started, seed " + round.seed());
+        hud.roundStarted(roundConfig.timeLimitSeconds());
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
         // The events catch most claims, but /give and friends fire nothing,
         // so every second the plugin looks at every team member's inventory.
@@ -386,6 +391,7 @@ public final class Game {
         if (current == null || current.state() != Round.State.RUNNING) {
             return;
         }
+        hud.clockTick();
         long remaining = current.remainingMs(roundConfig.timeLimitSeconds());
         if (remaining <= 0) {
             finishByTimeout();
@@ -407,12 +413,14 @@ public final class Game {
                     Placeholder.unparsed("count", String.valueOf(current.board().count(winner.id()))));
             plugin.getLogger().info("Round timed out, winner: " + winner.name() + ", seed " + current.seed());
         }
+        hud.timeUp();
         endRound();
     }
 
     /** The round is over: everything back to the lobby. */
     private void endRound() {
         cancelTasks();
+        hud.hideAll();
         restoreInventories();
         round = null;
         roundConfig = null;
@@ -465,6 +473,7 @@ public final class Game {
                 Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
         plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
                 + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        hud.claimHappened(team);
         // Only the team that just reached the win condition ends the round.
         if (current.board().completedWinner().orElse(-1) == team.id()) {
             winByCompletion(current, team);
@@ -472,9 +481,10 @@ public final class Game {
     }
 
     private void winByCompletion(Round current, Team winner) {
-        String time = formatElapsed(current.elapsedMs());
+        String time = clock(current.elapsedMs());
         broadcast("round-won-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
         plugin.getLogger().info("Round won by " + winner.name() + " in " + time + ", seed " + current.seed());
+        hud.won(winner);
         endRound();
     }
 
@@ -484,7 +494,8 @@ public final class Game {
         return wanted != null && wanted == stack.getType().asItemType();
     }
 
-    private String formatElapsed(long ms) {
+    /** The clock as m:ss, for chat lines and the HUD. */
+    static String clock(long ms) {
         long seconds = ms / 1000;
         return seconds / 60 + ":" + String.format(Locale.ROOT, "%02d", seconds % 60);
     }
