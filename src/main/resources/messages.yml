@@ -49,8 +49,15 @@ team-assigned: "<prefix><body><player><body> se ha unido al equipo <team><body>.
 teams-locked: "<prefix><err>No puedes cambiar los equipos durante una ronda."
 team-cleared: "<prefix><body>Se han vaciado todos los equipos."
 team-list-header: "<brand> <hl>Equipos"
-team-list-entry: " <hl>➤</hl> <team> <muted>|</muted> <body><count>/<max> jugadores"
+team-list-entry: " <hl>➤</hl> <team> <muted>|</muted> <body><count>/<max> jugadores <join>"
 team-auto-name: "Equipo <count>"
+
+# Shown by /bingo join when several teams have room: one button per team.
+# The button and its tooltip are rendered by the plugin; <join> in the list
+# entry above is the same button.
+team-pick: "<prefix><body>Elige equipo: pulsa un botón."
+team-join-button: "<hl>[Unirse]</hl>"
+team-join-hover: "<body>Unirse al equipo <team>"
 
 # Round flow.
 round-already-running: "<prefix><err>Ya hay una ronda en marcha. Detenla con <hl>/bingo stop</hl>."
@@ -62,7 +69,7 @@ round-config-broken: "<prefix><err>No se puede empezar: hay errores en config.ym
 round-countdown-chat: "<prefix><body>La ronda empieza en <hl><count></hl> <body>segundos."
 round-started-title: "<gradient:#FFD23F:#FF8A1F><b>¡Bingo!</b></gradient>"
 round-started-subtitle: "<body>¡Corre a por los objetos de tu cartilla!"
-round-started-chat: "<prefix><body>¡La ronda ha empezado! Abre tu cartilla con <hl>/bingo carta</hl>."
+round-started-chat: "<prefix><body>¡La ronda ha empezado! Abre tu cartilla con <hl>/bingo card</hl>."
 round-cleared-inventories: "<prefix><body>Los inventarios se han vaciado; los recuperarás al terminar."
 round-stopped: "<prefix><body>El administrador ha detenido la ronda."
 round-paused: "<prefix><body>Ronda en pausa. La cartilla no cambia mientras tanto."

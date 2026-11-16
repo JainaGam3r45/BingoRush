@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -196,6 +197,11 @@ public final class Game {
             String name = messages().plainText("team-auto-name",
                     Placeholder.unparsed("count", String.valueOf(teams.all().size() + 1)));
             target = teams.createAuto(name, teams.all().size());
+        } else if (roomyTeams(config) > 1) {
+            // More than one team to choose from: let the player pick with a
+            // click instead of landing wherever there is space.
+            showTeamPicker(player, config);
+            return;
         } else {
             target = teams.withRoom(cap(config));
             if (target == null) {
@@ -280,10 +286,48 @@ public final class Game {
         int cap = cap(config);
         for (Team team : teams.all()) {
             messages().send(caller, "team-list-entry",
+                    joinButton(team),
                     teamPlaceholder(team),
                     Placeholder.unparsed("count", String.valueOf(team.size())),
                     Placeholder.unparsed("max", String.valueOf(cap)));
         }
+    }
+
+    /** The click-to-join list, for /bingo join with more than one open team. */
+    private void showTeamPicker(Player player, BingoConfig config) {
+        messages().send(player, "team-pick");
+        int cap = cap(config);
+        for (Team team : teams.all()) {
+            if (team.size() >= cap) {
+                continue;
+            }
+            messages().send(player, "team-list-entry",
+                    joinButton(team),
+                    teamPlaceholder(team),
+                    Placeholder.unparsed("count", String.valueOf(team.size())),
+                    Placeholder.unparsed("max", String.valueOf(cap)));
+        }
+    }
+
+    private long roomyTeams(BingoConfig config) {
+        int cap = cap(config);
+        return teams.all().stream().filter(team -> team.size() < cap).count();
+    }
+
+    /**
+     * A [Unirse] button that runs /bingo join for that team. The command gets
+     * the name quoted, because team names may hold spaces and Brigadier needs
+     * quotes to parse them as one argument.
+     */
+    private TagResolver joinButton(Team team) {
+        Component button = messages().render("team-join-button")
+                .hoverEvent(messages().render("team-join-hover", teamPlaceholder(team)))
+                .clickEvent(ClickEvent.runCommand("/bingo join " + quoted(team.name())));
+        return Placeholder.component("join", button);
+    }
+
+    private static String quoted(String name) {
+        return '"' + name.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
     }
 
     /**
