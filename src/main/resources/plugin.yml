@@ -1,0 +1,15 @@
+name: '${name}'
+version: '${version}'
+main: com.jifercraft.bingo.BingoRush
+api-version: '26.3'
+author: JainaGam3r45
+website: https://www.jifercraft.com
+description: Bingo minigame for live events
+
+permissions:
+  bingo.play:
+    description: Lets the player open the bingo card and join a team.
+    default: true
+  bingo.admin:
+    description: Lets the player start, stop and configure bingo rounds.
+    default: op
