@@ -18,7 +18,6 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -272,13 +271,17 @@ public final class Game {
         if (team == null) {
             return;
         }
-        for (int cell = 0; cell < BingoCard.CELLS; cell++) {
-            if (current.board().isClaimed(cell, team.id())) {
+        for (ItemStack stack : player.getInventory().getContents()) {
+            if (stack == null || stack.isEmpty()) {
                 continue;
             }
-            Material material = materialFor(current, cell);
-            if (material != null && player.getInventory().contains(material)) {
-                claimCell(current, team, cell, player);
+            for (int cell = 0; cell < BingoCard.CELLS; cell++) {
+                if (current.board().isClaimed(cell, team.id())) {
+                    continue;
+                }
+                if (carriedMatches(current, cell, stack)) {
+                    claimCell(current, team, cell, player);
+                }
             }
         }
     }
@@ -448,9 +451,10 @@ public final class Game {
         endRound();
     }
 
-    private Material materialFor(Round current, int cell) {
-        ItemType type = roundConfig.itemType(current.card().item(cell));
-        return type == null ? null : type.asMaterial();
+    /** Registry item types are singletons, so identity compare is enough. */
+    private boolean carriedMatches(Round current, int cell, ItemStack stack) {
+        ItemType wanted = roundConfig.itemType(current.card().item(cell));
+        return wanted != null && wanted == stack.getType().asItemType();
     }
 
     private String formatElapsed(long ms) {
