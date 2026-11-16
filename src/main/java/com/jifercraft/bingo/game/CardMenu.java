@@ -8,11 +8,17 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
@@ -20,11 +26,12 @@ import org.bukkit.inventory.MenuType;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * The /bingo carta menu: the 5x5 card centered in a 9x5 view, one icon per
- * cell with the claim state in the lore. It is a snapshot on open, not a live
- * view; the player runs the command again when they want it fresh. Every item
- * carries a persistent tag, and the listener checks the first slot of the top
- * inventory with it to make the whole view read only.
+ * The card menu: the 5x5 card centered in a 9x5 view, one icon per cell with
+ * the tier and the claim state in the lore, the viewer's own claims glowing.
+ * Every open view is tracked, so when a claim lands the plugin redraws all
+ * the menus of that round in the same tick. Every item carries a persistent
+ * tag, and the listener checks the first slot of the top inventory with it to
+ * make the whole view read only.
  */
 public final class CardMenu {
 
@@ -33,10 +40,15 @@ public final class CardMenu {
     private static final int FIRST_CARD_COLUMN = 2;
     private static final int COLUMNS = 9;
 
+    // One entry per player with the menu open, with the round it belongs to.
+    private record OpenMenu(Round round, Inventory top) {
+    }
+
     private final BingoRush plugin;
     private final Messages messages;
     private final Teams teams;
     private final NamespacedKey tag;
+    private final Map<UUID, OpenMenu> openMenus = new HashMap<>();
 
     public CardMenu(BingoRush plugin, Teams teams, NamespacedKey tag) {
         this.plugin = plugin;
@@ -55,23 +67,68 @@ public final class CardMenu {
         InventoryView view = MenuType.GENERIC_9X5.builder()
                 .title(messages.render("menu-title"))
                 .build(player);
-        int rows = view.getTopInventory().getSize() / COLUMNS;
-        for (int slot = 0; slot < view.getTopInventory().getSize(); slot++) {
+        render(view.getTopInventory(), round, viewer);
+        view.open();
+        openMenus.put(player.getUniqueId(), new OpenMenu(round, view.getTopInventory()));
+    }
+
+    /**
+     * Redraws every open menu of this round, called in the same tick the
+     * claim landed. Menus nobody has open anymore are dropped.
+     */
+    public void refresh(Round round) {
+        Iterator<Map.Entry<UUID, OpenMenu>> iterator = openMenus.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, OpenMenu> entry = iterator.next();
+            OpenMenu menu = entry.getValue();
+            if (menu.round() != round) {
+                continue;
+            }
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player == null || player.getOpenInventory().getTopInventory() != menu.top()) {
+                iterator.remove();
+                continue;
+            }
+            Team viewer = teams.of(entry.getKey());
+            if (viewer != null) {
+                render(menu.top(), round, viewer);
+            }
+        }
+    }
+
+    /** Closes every open menu, for when the round ends. */
+    public void closeAll() {
+        List<Player> viewers = new ArrayList<>();
+        for (Map.Entry<UUID, OpenMenu> entry : openMenus.entrySet()) {
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player != null && player.getOpenInventory().getTopInventory() == entry.getValue().top()) {
+                viewers.add(player);
+            }
+        }
+        openMenus.clear();
+        // closeInventory fires the close event, so the map is empty first.
+        for (Player player : viewers) {
+            player.closeInventory();
+        }
+    }
+
+    /** Drops the tracking of one viewer, from the close and quit events. */
+    public void forget(UUID playerId) {
+        openMenus.remove(playerId);
+    }
+
+    private void render(Inventory top, Round round, Team viewer) {
+        for (int slot = 0; slot < top.getSize(); slot++) {
             int column = slot % COLUMNS;
             if (column < FIRST_CARD_COLUMN || column >= FIRST_CARD_COLUMN + BingoCard.COLUMNS) {
-                view.getTopInventory().setItem(slot, filler());
+                top.setItem(slot, filler());
             }
         }
         for (int cell = 0; cell < BingoCard.CELLS; cell++) {
             int row = cell / BingoCard.COLUMNS;
             int column = cell % BingoCard.COLUMNS;
-            int slot = row * COLUMNS + column + FIRST_CARD_COLUMN;
-            if (row >= rows) {
-                break;
-            }
-            view.getTopInventory().setItem(slot, cellItem(round, viewer, cell));
+            top.setItem(row * COLUMNS + column + FIRST_CARD_COLUMN, cellItem(round, viewer, cell));
         }
-        view.open();
     }
 
     private ItemStack filler() {

@@ -5,9 +5,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 /**
  * Turns gameplay events into claim checks. The events cover the fast paths:
@@ -60,5 +62,17 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         game.restoreInventory(event.getPlayer());
+    }
+
+    /** An open card menu nobody can see anymore is not refreshed. */
+    @EventHandler
+    public void onClose(InventoryCloseEvent event) {
+        game.cardMenuClosed(event.getPlayer().getUniqueId());
+    }
+
+    /** In case the close event slips past, the quit event drops the menu too. */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        game.cardMenuClosed(event.getPlayer().getUniqueId());
     }
 }

@@ -370,10 +370,16 @@ public final class Game {
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
         cancelTasks();
+        cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();
         round = null;
         roundConfig = null;
+    }
+
+    /** A player closed their card menu; stop tracking it. */
+    public void cardMenuClosed(UUID playerId) {
+        cardMenu.forget(playerId);
     }
 
     private long nextSeed() {
@@ -464,6 +470,7 @@ public final class Game {
     /** The round is over: everything back to the lobby. */
     private void endRound() {
         cancelTasks();
+        cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();
         round = null;
@@ -518,6 +525,7 @@ public final class Game {
         plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
                 + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
         hud.claimHappened(team);
+        cardMenu.refresh(current);
         // Only the team that just reached the win condition ends the round.
         if (current.board().completedWinner().orElse(-1) == team.id()) {
             winByCompletion(current, team);
