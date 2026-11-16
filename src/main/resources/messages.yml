@@ -1,0 +1,74 @@
+# BingoRush messages.
+# Everything a player reads lives here, in MiniMessage. The palette below is
+# the only place colors are defined: change those hex values and the whole
+# plugin follows. Text a player controls (their name, a team name) arrives
+# unparsed, so it cannot inject tags.
+
+palette:
+  body: "#FFF3D6"
+  hl: "#FFC233"
+  ok: "#6BE585"
+  err: "#FF6B6B"
+  errval: "#FF2E2E"
+  muted: "#8C8C8C"
+
+brand: "<gradient:#FFD23F:#FF8A1F><b>BingoRush</b></gradient>"
+prefix: "<brand> <muted>»</muted> "
+
+# The header and one entry per command. <command> is the syntax, <description>
+# what it does. The entries themselves are built from the command tree.
+help-header: "<brand> <hl>Comandos"
+help-entry: " <hl>➤</hl> <white><command></white> <muted>|</muted> <body><description>"
+
+no-permission: "<prefix><err>No tienes permiso para eso."
+players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
+
+# Teams.
+team-joined: "<prefix><body>Te has unido al equipo <team><body>."
+team-left: "<prefix><body>Has salido del equipo."
+team-not-in: "<prefix><err>No estás en ningún equipo. Únete con <hl>/bingo join</hl>."
+team-not-found: "<prefix><err>No existe el equipo <errval><name></errval><err>."
+team-full: "<prefix><err>El equipo <team><err> está completo."
+team-already-in: "<prefix><err>Ya estás en el equipo <team><err>. Sal de él antes de cambiarte."
+team-created: "<prefix><body>Equipo <team><body> creado."
+team-removed: "<prefix><body>Equipo <team><body> eliminado."
+team-name-taken: "<prefix><err>Ya existe un equipo llamado <errval><name></errval><err>."
+team-assigned: "<prefix><body><player><body> se ha unido al equipo <team><body>."
+team-list-header: "<brand> <hl>Equipos"
+team-list-entry: " <hl>➤</hl> <team> <muted>|</muted> <body><count> jugadores"
+
+# Round flow.
+round-already-running: "<prefix><err>Ya hay una ronda en marcha. Detenla con <hl>/bingo stop</hl>."
+round-not-running: "<prefix><err>No hay ninguna ronda en marcha."
+round-config-broken: "<prefix><err>No se puede empezar: hay errores en config.yml. Mira la consola."
+round-countdown-chat: "<prefix><body>La ronda empieza en <hl><count></hl> <body>segundos."
+round-started-title: "<gradient:#FFD23F:#FF8A1F><b>¡Bingo!</b></gradient>"
+round-started-subtitle: "<body>¡Corre a por los objetos de tu cartilla!"
+round-started-chat: "<prefix><body>¡La ronda ha empezado! Abre tu cartilla con <hl>/bingo carta</hl>."
+round-cleared-inventories: "<prefix><body>Los inventarios se han vaciado; los recuperarás al terminar."
+round-stopped: "<prefix><body>El administrador ha detenido la ronda."
+round-paused: "<prefix><body>Ronda en pausa. La cartilla no cambia mientras tanto."
+round-resumed: "<prefix><body>La ronda continúa."
+round-won-title: "<gradient:#FFD23F:#FF8A1F><b>¡<team> gana!</b></gradient>"
+round-won-subtitle: "<body>Cartilla completa en <hl><time></hl>"
+round-won-chat: "<prefix><body>¡El equipo <team><body> ha completado la cartilla!"
+round-time-up-title: "<gradient:#FF6B6B:#FF2E2E><b>¡Tiempo!</b></gradient>"
+round-time-up-chat: "<prefix><body>Se acabó el tiempo. Gana el equipo <team><body> con <hl><count></hl> <body>casillas."
+round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna casilla."
+
+# Claims.
+claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)"
+
+# Card menu.
+card-opened: "<prefix><body>Aquí tienes tu cartilla."
+card-not-playing: "<prefix><err>No estás jugando esta ronda. Únete con <hl>/bingo join</hl>."
+menu-cell-unclaimed: "<muted>Sin reclamar</muted>"
+menu-claimed-by: "<body>Conseguida por <team>"
+menu-claimed-at: "<muted>a las <time>"
+
+# Spectators.
+late-join-spectate: "<prefix><body>La ronda ya empezó: la miras como espectador. Cuando acabe podrás jugar."
+
+# Interface text.
+sidebar-title: "<brand>"
+bossbar-title: "<brand> <body>Quedan <hl><time></hl>"
