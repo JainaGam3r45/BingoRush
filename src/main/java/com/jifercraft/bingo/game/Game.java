@@ -8,6 +8,7 @@ import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
@@ -26,6 +27,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
@@ -40,6 +42,7 @@ public final class Game {
     private final Teams teams;
     private final CardMenu cardMenu;
     private final NamespacedKey cardTag;
+    private final NamespacedKey cardItemTag;
     private final Hud hud;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
@@ -55,6 +58,7 @@ public final class Game {
         this.plugin = plugin;
         this.teams = teams;
         this.cardTag = new NamespacedKey(plugin, "card-menu");
+        this.cardItemTag = new NamespacedKey(plugin, "card-item");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
         this.hud = new Hud(plugin, this);
     }
@@ -215,6 +219,10 @@ public final class Game {
         }
         target.add(player.getUniqueId());
         messages().send(player, "team-joined", teamPlaceholder(target));
+        if (current != null) {
+            // Joined during the countdown or a round that allows late play.
+            giveCardItem(player);
+        }
     }
 
     public void leaveTeam(Player player) {
@@ -367,12 +375,71 @@ public final class Game {
         }
     }
 
+    /** True when the stack is the physical card item. */
+    public boolean isCardItem(ItemStack stack) {
+        return stack != null && stack.hasItemMeta()
+                && stack.getItemMeta().getPersistentDataContainer().has(cardItemTag, PersistentDataType.BYTE);
+    }
+
+    /** One card item per member of every team, after their inventories cleared. */
+    private void giveCardItems() {
+        for (Team team : teams.all()) {
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null) {
+                    giveCardItem(member);
+                }
+            }
+        }
+    }
+
+    private void giveCardItem(Player player) {
+        removeCardItems(player);
+        ItemStack card = ItemType.BOOK.createItemStack();
+        card.editMeta(meta -> {
+            meta.displayName(messages().render("card-item-name"));
+            meta.lore(List.of(messages().render("card-item-lore")));
+            meta.getPersistentDataContainer().set(cardItemTag, PersistentDataType.BYTE, (byte) 1);
+        });
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(card);
+        for (ItemStack rest : leftover.values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), rest);
+        }
+    }
+
+    private void removeCardItems(Player player) {
+        ItemStack[] contents = player.getInventory().getContents();
+        boolean changed = false;
+        for (int i = 0; i < contents.length; i++) {
+            if (isCardItem(contents[i])) {
+                contents[i] = null;
+                changed = true;
+            }
+        }
+        if (changed) {
+            player.getInventory().setContents(contents);
+        }
+    }
+
+    /** Card items go away with the round, even for players without a snapshot. */
+    private void removeCardItemsFromAll() {
+        for (Team team : teams.all()) {
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null) {
+                    removeCardItems(member);
+                }
+            }
+        }
+    }
+
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
         cancelTasks();
         cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();
+        removeCardItemsFromAll();
         round = null;
         roundConfig = null;
     }
@@ -424,6 +491,7 @@ public final class Game {
             saveAndClearInventories();
             broadcast("round-cleared-inventories");
         }
+        giveCardItems();
         if (roundConfig.scatterPlayers()) {
             scatterTeams();
         }
@@ -473,6 +541,7 @@ public final class Game {
         cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();
+        removeCardItemsFromAll();
         round = null;
         roundConfig = null;
     }

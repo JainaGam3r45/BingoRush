@@ -98,6 +98,10 @@ menu-claimed-at: "<muted>a las <time>"
 # Spectators.
 late-join-spectate: "<prefix><body>La ronda ya empezó: la miras como espectador. Cuando acabe podrás jugar."
 
+# The physical card item handed out when the round starts.
+card-item-name: "<brand> <hl>Cartilla</hl>"
+card-item-lore: "<body>Clic derecho para ver tus casillas."
+
 # Interface text.
 sidebar-title: "<brand>"
 bossbar-title: "<brand> <body>Quedan <hl><time></hl>"

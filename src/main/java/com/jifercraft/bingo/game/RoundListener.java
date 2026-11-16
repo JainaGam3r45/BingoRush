@@ -3,13 +3,17 @@ package com.jifercraft.bingo.game;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 
 /**
  * Turns gameplay events into claim checks. The events cover the fast paths:
@@ -56,6 +60,37 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onBucketFill(PlayerBucketFillEvent event) {
         game.checkClaims(event.getPlayer());
+    }
+
+    /** Right click with the card item opens the card, nothing else happens. */
+    @EventHandler
+    public void onInteract(PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if ((action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK)
+                || event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        if (!game.isCardItem(event.getItem())) {
+            return;
+        }
+        event.setCancelled(true);
+        game.openCard(event.getPlayer());
+    }
+
+    /** The card item cannot be moved into chests or around the inventory. */
+    @EventHandler
+    public void onCardClick(InventoryClickEvent event) {
+        if (event.getCurrentItem() != null && game.isCardItem(event.getCurrentItem())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** Nor dropped on the ground, where the round end would not find it. */
+    @EventHandler
+    public void onCardDrop(PlayerDropItemEvent event) {
+        if (game.isCardItem(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+        }
     }
 
     /** A player who left during a round gets their saved items back. */
