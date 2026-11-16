@@ -36,6 +36,8 @@ team-name-taken: "<prefix><err>Ya existe un equipo llamado <errval><name></errva
 team-assigned: "<prefix><body><player><body> se ha unido al equipo <team><body>."
 team-list-header: "<brand> <hl>Equipos"
 team-list-entry: " <hl>➤</hl> <team> <muted>|</muted> <body><count> jugadores"
+team-auto-name: "Equipo <count>"
+team-all-full: "<prefix><err>Todos los equipos están llenos."
 
 # Round flow.
 round-already-running: "<prefix><err>Ya hay una ronda en marcha. Detenla con <hl>/bingo stop</hl>."

@@ -8,11 +8,14 @@ import io.papermc.paper.registry.RegistryKey;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import net.kyori.adventure.key.InvalidKeyException;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -49,10 +52,12 @@ public final class BingoConfig {
     private final ItemPool pool;
     private final Map<String, ItemType> itemsByKey;
     private final Map<SoundId, Key> sounds;
+    private final List<TeamDefinition> teamDefinitions;
 
     private BingoConfig(WinMode winMode, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
-            ItemPool pool, Map<String, ItemType> itemsByKey, Map<SoundId, Key> sounds) {
+            ItemPool pool, Map<String, ItemType> itemsByKey, Map<SoundId, Key> sounds,
+            List<TeamDefinition> teamDefinitions) {
         this.winMode = winMode;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
@@ -64,6 +69,7 @@ public final class BingoConfig {
         this.pool = pool;
         this.itemsByKey = itemsByKey;
         this.sounds = sounds;
+        this.teamDefinitions = teamDefinitions;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -169,11 +175,33 @@ public final class BingoConfig {
             }
         }
 
+        List<TeamDefinition> teamDefinitions = new ArrayList<>();
+        List<Map<?, ?>> rawTeams = yaml.getMapList("teams");
+        Set<String> teamNames = new HashSet<>();
+        for (int i = 0; i < rawTeams.size(); i++) {
+            Map<?, ?> entry = rawTeams.get(i);
+            Object name = entry.get("name");
+            if (name == null || name.toString().isBlank()) {
+                problems.add("teams." + i + " has no name");
+                continue;
+            }
+            if (!teamNames.add(name.toString())) {
+                problems.add("The team '" + name + "' appears twice in the teams list");
+                continue;
+            }
+            TextColor color = TextColor.fromHexString(entry.get("color") == null ? null : entry.get("color").toString());
+            if (color == null) {
+                problems.add("teams." + i + " has a color that is not a hex color like #FF5555");
+                continue;
+            }
+            teamDefinitions.add(new TeamDefinition(name.toString(), color.value()));
+        }
+
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
         return new BingoConfig(winMode, timeLimit, countdown, teamSize, clearInventories,
-                scatterPlayers, scatterRadius, lateJoin, pool, types, sounds);
+                scatterPlayers, scatterRadius, lateJoin, pool, types, sounds, teamDefinitions);
     }
 
     public WinMode winMode() {
@@ -220,5 +248,10 @@ public final class BingoConfig {
     /** The sound for one event, or null when the admin left it empty. */
     public Key sound(SoundId id) {
         return sounds.get(id);
+    }
+
+    /** The teams from config.yml, in order. Empty when the admin wants them made on the fly. */
+    public List<TeamDefinition> teamDefinitions() {
+        return teamDefinitions;
     }
 }

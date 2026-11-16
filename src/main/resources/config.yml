@@ -30,6 +30,20 @@ scatter-radius: 24
 # "spectate" lets them watch the round.
 late-join: join
 
+# Teams for the event. Each one has a name and a color, and players join with
+# /bingo join or /bingo join <team>. With no teams here, the plugin
+# invents one per group as players join. Teams added at runtime with
+# /bingo teams last until the server restarts.
+teams:
+  - name: Rojo
+    color: "#FF5555"
+  - name: Azul
+    color: "#5555FF"
+  - name: Verde
+    color: "#55FF55"
+  - name: Amarillo
+    color: "#FFFF55"
+
 # The 25 cells of the card come from these tiers. Each tier lists the items
 # it can draw from and how many cells it fills; the cells must add up to 25.
 # Item keys are namespaced, plain names mean minecraft:. The plugin checks
