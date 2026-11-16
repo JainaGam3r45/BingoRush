@@ -20,6 +20,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
 import org.bukkit.inventory.MenuType;
@@ -135,6 +136,7 @@ public final class CardMenu {
         ItemStack stack = ItemType.GRAY_STAINED_GLASS_PANE.createItemStack();
         stack.editMeta(meta -> {
             meta.displayName(Component.empty());
+            meta.addItemFlags(ItemFlag.values());
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
         });
         return stack;
@@ -148,29 +150,44 @@ public final class CardMenu {
         String tierId = plugin.bingoConfig().pool().tierOf(itemKey);
         boolean own = board.claimers(cell).contains(viewer.id());
         stack.editMeta(meta -> {
+            Component translatable = Component.translatable(type == null ? itemKey : type.translationKey());
+            meta.displayName(messages.render("menu-cell-name", Placeholder.component("item", translatable)));
+
             List<Component> lore = new ArrayList<>();
+            lore.add(messages.render("menu-cell-separator"));
             if (tierId != null) {
-                lore.add(messages.render("menu-cell-tier",
-                        Placeholder.unparsed("tier", tierId)));
+                Component tierComp = messages.render("tier-" + tierId);
+                lore.add(messages.render("menu-cell-difficulty", Placeholder.component("tier", tierComp)));
             }
+            lore.add(messages.render("menu-cell-separator"));
+
             List<Integer> claimers = board.claimers(cell);
             if (claimers.isEmpty()) {
-                lore.add(messages.render("menu-cell-unclaimed"));
+                lore.add(messages.render("menu-status-available"));
+                lore.add(messages.render("menu-status-available-hint"));
             } else {
-                for (int teamId : claimers) {
-                    Team claimer = teams.byId(teamId);
-                    if (claimer != null) {
-                        lore.add(messages.render("menu-claimed-by", Game.teamPlaceholder(claimer)));
-                    }
-                }
                 if (own) {
+                    lore.add(messages.render("menu-status-own"));
+                    lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
                     long claimedAt = board.claimTime(cell, viewer.id());
-                    lore.add(messages.render("menu-claimed-at",
+                    lore.add(messages.render("menu-status-own-time",
                             Placeholder.unparsed("time", CLOCK.format(
                                     Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
                 }
+                for (int teamId : claimers) {
+                    if (teamId == viewer.id()) {
+                        continue;
+                    }
+                    Team claimer = teams.byId(teamId);
+                    if (claimer != null) {
+                        lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                    }
+                }
             }
+            lore.add(messages.render("menu-cell-separator"));
             meta.lore(lore);
+
+            meta.addItemFlags(ItemFlag.values());
             // The viewer's own claims glow; rival claims stay dull, so the
             // state reads at a glance before the lore.
             meta.setEnchantmentGlintOverride(own ? Boolean.TRUE : Boolean.FALSE);
