@@ -41,8 +41,8 @@ public final class CardMenu {
     private static final int FIRST_CARD_COLUMN = 2;
     private static final int COLUMNS = 9;
 
-    // One entry per player with the menu open, with the round it belongs to.
-    private record OpenMenu(Round round, Inventory top) {
+    // One entry per player with the menu open, with the round and viewed team.
+    private record OpenMenu(Round round, Inventory top, int teamId) {
     }
 
     private final BingoRush plugin;
@@ -64,13 +64,16 @@ public final class CardMenu {
                 && stack.getItemMeta().getPersistentDataContainer().has(tag, PersistentDataType.BYTE);
     }
 
-    public void open(Player player, Round round, Team viewer) {
+    public void open(Player player, Round round, Team viewer, boolean spectator) {
+        Component title = spectator
+                ? messages.render("menu-title-spectator", Game.teamPlaceholder(viewer))
+                : messages.render("menu-title");
         InventoryView view = MenuType.GENERIC_9X5.builder()
-                .title(messages.render("menu-title"))
+                .title(title)
                 .build(player);
         render(view.getTopInventory(), round, viewer);
         view.open();
-        openMenus.put(player.getUniqueId(), new OpenMenu(round, view.getTopInventory()));
+        openMenus.put(player.getUniqueId(), new OpenMenu(round, view.getTopInventory(), viewer.id()));
     }
 
     /**
@@ -90,7 +93,7 @@ public final class CardMenu {
                 iterator.remove();
                 continue;
             }
-            Team viewer = teams.of(entry.getKey());
+            Team viewer = teams.byId(menu.teamId());
             if (viewer != null) {
                 render(menu.top(), round, viewer);
             }

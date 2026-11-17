@@ -21,6 +21,7 @@ help:
   header: "<brand> <hl>Comandos"
   join: "<white>/bingo join <hl>[equipo]</hl></white> <muted>|</muted> <body>Únete a un equipo"
   card: "<white>/bingo card</white> <muted>|</muted> <body>Abre tu cartilla"
+  card-spectator: "<white>/bingo card <hl><equipo></hl></white> <muted>|</muted> <body>Mira la cartilla de un equipo"
   leave: "<white>/bingo leave</white> <muted>|</muted> <body>Sal de tu equipo"
   coords: "<white>/bingo coords</white> <muted>|</muted> <body>Envía tus coordenadas a tu equipo"
   start: "<white>/bingo start <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
@@ -94,7 +95,9 @@ claim-actionbar: "<ok>+ <item></ok> <body>reclamado <muted>(<count>/<total>)</mu
 
 # Card menu.
 menu-title: "<brand> <hl>Cartilla</hl>"
+menu-title-spectator: "<brand> <hl>Cartilla - <team></hl>"
 card-opened: "<prefix><body>Aquí tienes tu cartilla."
+card-opened-spectator: "<prefix><body>Viendo la cartilla del equipo <team><body>."
 card-not-playing: "<prefix><err>No estás jugando esta ronda. Únete con <hl>/bingo join</hl>."
 menu-cell-name: "<!italic><gradient:#FFD23F:#FF8A1F><b><item></b></gradient>"
 menu-cell-separator: "<!italic><muted><st>                             </st></muted>"

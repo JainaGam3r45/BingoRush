@@ -89,8 +89,24 @@ public final class Game {
             messages().send(player, "card-not-playing");
             return;
         }
-        cardMenu.open(player, current, team);
+        cardMenu.open(player, current, team, false);
         messages().send(player, "card-opened");
+    }
+
+    /** Opens a team card from that team's perspective for spectators and casters. */
+    public void openCardSpectator(Player player, String teamName) {
+        Round current = round;
+        if (current == null) {
+            messages().send(player, "round-not-running");
+            return;
+        }
+        Team target = teams.byName(teamName);
+        if (target == null) {
+            messages().send(player, "team-not-found", Placeholder.unparsed("name", teamName));
+            return;
+        }
+        cardMenu.open(player, current, target, true);
+        messages().send(player, "card-opened-spectator", teamPlaceholder(target));
     }
 
     public void startRound(CommandSender caller, String seedArg) {
