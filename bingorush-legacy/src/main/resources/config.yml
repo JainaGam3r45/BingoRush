@@ -1,0 +1,239 @@
+# BingoRush configuration.
+# Values the plugin reads are checked when it loads this file; mistakes are
+# printed to the console, one line each, naming the key to fix.
+
+# Language of every message players read, from lang/messages_<language>.yml.
+# "en" and "es" ship with the plugin. To add one, copy messages_en.yml to
+# messages_<code>.yml, translate it and put the code here.
+language: en
+
+# Game mode: "items" for classic item collection, "advancements" for vanilla
+# advancement hunt.
+game-mode: items
+
+# How a round is won: "full" fills the whole card, "line" completes one row,
+# column or diagonal.
+win-mode: full
+
+# Lockout mode: cells are exclusive. The first team to claim a cell locks it
+# forever, preventing rivals from claiming it.
+lockout: false
+
+# Lives per player during a round. A player who uses them all watches the
+# rest as a spectator, and a team with nobody left is out. When only one team
+# is still standing it wins; if every team is out, the most cells wins.
+# 0 means unlimited lives, 1 is hardcore.
+lives: 0
+
+# What chat shows when a player in a round dies or gets an advancement.
+# "custom" uses the templates in the language file, "vanilla" keeps Minecraft's
+# own line and "hidden" removes it. Players outside the round are left alone.
+round-chat:
+  deaths: custom
+  advancements: custom
+
+# Show the round card as its own tab in the advancements screen (L), with the
+# cells your team already has marked as done. Needs 1.12 or newer. On these
+# versions the server adds the 26 tab entries one at a time and rereads every
+# online player's advancements from disk after each one, which a busy server
+# feels when the countdown starts, so it starts off here.
+advancement-tab: false
+
+# Round time limit in seconds. When it runs out, the team with the most
+# claimed cells wins and an earlier last claim breaks a tie. 0 means no
+# clock: the round runs until a team completes the card.
+time-limit: 1800
+
+# Seconds between /bingo start and the round itself. 0 starts right away.
+countdown: 10
+
+# Players per team. 1 plays solo.
+team-size: 2
+
+# Empty every inventory when the round starts and give the contents back when
+# it ends. Stops players from bringing a pre-filled backpack.
+clear-inventories: true
+
+# Spread team members around the world spawn when the round starts, so
+# nobody spawns on top of the chests.
+scatter-players: true
+scatter-radius: 24
+
+# What a player who joins after the start gets: "join" puts them in a team,
+# "spectate" lets them watch the round.
+late-join: join
+
+# Teams for the event. Each one has a name and a color, and players join with
+# /bingo join, /bingo join <team> or the /bingo teams menu. With no teams
+# here, the plugin invents one per group as players join. Teams added at
+# runtime with /bingo teams add last until the server restarts.
+teams:
+  - name: Red
+    color: "#FF5555"
+  - name: Blue
+    color: "#5555FF"
+  - name: Green
+    color: "#55FF55"
+  - name: Yellow
+    color: "#FFFF55"
+
+# The 25 cells of the card come from these tiers. Each tier lists the items
+# it can draw from and how many cells it fills; the cells must add up to 25.
+# Item keys are namespaced, plain names mean minecraft:. The plugin checks
+# every key against the item registry when it loads this file and prints one
+# console error per entry that does not exist.
+card:
+  tiers:
+    easy:
+      cells: 10
+      items:
+        - minecraft:oak_log
+        - minecraft:birch_log
+        - minecraft:cobblestone
+        - minecraft:coal
+        - minecraft:wheat
+        - minecraft:carrot
+        - minecraft:potato
+        - minecraft:apple
+        - minecraft:string
+        - minecraft:stick
+        - minecraft:paper
+        - minecraft:egg
+        - minecraft:sugar_cane
+        - minecraft:pumpkin
+        - minecraft:clay_ball
+        - minecraft:flint
+    medium:
+      cells: 8
+      items:
+        - minecraft:iron_ingot
+        - minecraft:gold_ingot
+        - minecraft:redstone
+        - minecraft:lapis_lazuli
+        - minecraft:amethyst_shard
+        - minecraft:bone
+        - minecraft:gunpowder
+        - minecraft:slime_ball
+        - minecraft:honeycomb
+        - minecraft:leather
+        - minecraft:bread
+        - minecraft:cooked_beef
+        - minecraft:glass_bottle
+        - minecraft:bucket
+    hard:
+      cells: 5
+      items:
+        - minecraft:diamond
+        - minecraft:emerald
+        - minecraft:blaze_rod
+        - minecraft:ender_pearl
+        - minecraft:golden_carrot
+        - minecraft:cake
+        - minecraft:name_tag
+        - minecraft:saddle
+        - minecraft:experience_bottle
+    epic:
+      cells: 2
+      items:
+        - minecraft:netherite_ingot
+        - minecraft:totem_of_undying
+        - minecraft:elytra
+        - minecraft:heart_of_the_sea
+        - minecraft:nether_star
+        - minecraft:beacon
+        - minecraft:enchanted_golden_apple
+
+# The 25 cells of the advancement card come from these tiers. Advancements are
+# checked against Bukkit.getAdvancement when loading this file; mistakes are
+# printed to the console, one line each. Recipe unlocks (minecraft:recipes/*)
+# must not be used here.
+advancement-pool:
+  tiers:
+    easy:
+      cells: 10
+      advancements:
+        - minecraft:story/mine_stone
+        - minecraft:story/upgrade_tools
+        - minecraft:story/smelt_iron
+        - minecraft:husbandry/breed_an_animal
+        - minecraft:story/obtain_armor
+        - minecraft:story/deflect_arrow
+        - minecraft:husbandry/plant_seed
+        - minecraft:husbandry/tame_an_animal
+        - minecraft:adventure/sleep_in_bed
+        - minecraft:adventure/shoot_arrow
+        - minecraft:husbandry/fishy_business
+        - minecraft:adventure/kill_a_mob
+        - minecraft:story/iron_tools
+        - minecraft:husbandry/make_a_sign_glow
+    medium:
+      cells: 8
+      advancements:
+        - minecraft:nether/find_fortress
+        - minecraft:story/lava_bucket
+        - minecraft:story/form_obsidian
+        - minecraft:story/mine_diamond
+        - minecraft:story/enchant_item
+        - minecraft:story/enter_the_nether
+        - minecraft:nether/obtain_blaze_rod
+        - minecraft:nether/distract_piglin
+        - minecraft:nether/find_bastion
+        - minecraft:adventure/trade
+        - minecraft:adventure/ol_betsy
+        - minecraft:adventure/summon_iron_golem
+        - minecraft:husbandry/safely_harvest_honey
+        - minecraft:husbandry/ride_a_boat_with_a_goat
+    hard:
+      cells: 5
+      advancements:
+        - minecraft:nether/brew_potion
+        - minecraft:story/cure_zombie_villager
+        - minecraft:adventure/sniper_duel
+        - minecraft:nether/return_to_sender
+        - minecraft:adventure/hero_of_the_village
+        - minecraft:adventure/voluntary_exile
+        - minecraft:adventure/bullseye
+        - minecraft:adventure/two_birds_one_arrow
+        - minecraft:nether/obtain_ancient_debris
+        - minecraft:nether/get_wither_skull
+        - minecraft:story/follow_ender_eye
+        - minecraft:story/enter_the_end
+    epic:
+      cells: 2
+      advancements:
+        - minecraft:end/kill_dragon
+        - minecraft:nether/all_potions
+        - minecraft:adventure/totem_of_undying
+        - minecraft:nether/summon_wither
+        - minecraft:end/elytra
+        - minecraft:end/dragon_egg
+        - minecraft:nether/netherite_armor
+
+# Vanilla sound keys played at each moment. An empty value plays nothing;
+# a key that does not exist is reported at load and then ignored.
+sounds:
+  claim: entity.experience_orb.pickup
+  win: ui.toast.challenge_complete
+  countdown: block.note_block.pling
+  start: block.beacon.activate
+  lockout-lost: block.note_block.bass
+  # Menus: clicks in the lobby menus and the chime for joining a team.
+  menu-click: ui.button.click
+  team-chime: block.note_block.chime
+
+# Update notifications from the GitHub repository.
+# Checks run asynchronously in the background so they never slow down the server.
+update-notifier:
+  enabled: true
+  on-join: true
+  # Hours between automatic background checks while the server runs. 0 disables the timer.
+  check-interval-hours: 24
+
+# Match history and logs.
+# Completed matches are saved asynchronously to data/matches/ as JSON files.
+history:
+  # Set to false to disable saving match results and in-game match history.
+  enabled: true
+  # Maximum number of match files to keep in data/matches/.
+  # The oldest matches are deleted when new ones finish. 0 disables the limit.
+  max-saved-matches: 50
