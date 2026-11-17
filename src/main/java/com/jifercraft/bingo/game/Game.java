@@ -7,10 +7,12 @@ import com.jifercraft.bingo.card.ClaimBoard;
 import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.config.BingoConfig;
+import com.jifercraft.bingo.config.ChatStyle;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.history.MatchRecord;
 import com.jifercraft.bingo.history.MatchSummary;
+import io.papermc.paper.advancement.AdvancementDisplay;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -38,6 +40,7 @@ import org.bukkit.advancement.Advancement;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
@@ -985,29 +988,59 @@ public final class Game {
      * Checks if the completed advancement belongs to the active card and awards
      * the cell if the player's team has not claimed it yet.
      */
-    public void checkAdvancementClaim(Player player, Advancement advancement) {
+    private boolean checkAdvancementClaim(Player player, Advancement advancement) {
         Round current = round;
         if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ADVANCEMENTS
                 || current.isEliminated(player.getUniqueId())) {
-            return;
+            return false;
         }
         NamespacedKey key = advancement.getKey();
         if (key.getNamespace().equals("minecraft") && key.getKey().startsWith("recipes/")) {
-            return;
+            return false;
         }
         Team team = teams.of(player.getUniqueId());
         if (team == null) {
-            return;
+            return false;
         }
         String keyStr = key.toString();
+        boolean claimed = false;
         for (int cell = 0; cell < BingoCard.CELLS; cell++) {
             if (current.board().isClaimed(cell, team.id())) {
                 continue;
             }
             if (keyStr.equalsIgnoreCase(current.card().item(cell))) {
                 claimAdvancementCell(current, team, cell, player, advancement);
+                claimed = true;
             }
         }
+        return claimed;
+    }
+
+    /**
+     * An advancement for anyone on the server. Team members in a round may
+     * claim a cell with it, and their chat line follows round-chat.advancements.
+     */
+    public void advancementDone(PlayerAdvancementDoneEvent event) {
+        Player player = event.getPlayer();
+        Team team = teams.of(player.getUniqueId());
+        // Read before the claim: a winning claim ends the round and drops roundConfig.
+        boolean inRound = round != null && team != null;
+        ChatStyle style = inRound && roundConfig != null ? roundConfig.advancementChat() : ChatStyle.VANILLA;
+        boolean claimed = checkAdvancementClaim(player, event.getAdvancement());
+        Component vanilla = event.message();
+        if (!inRound || vanilla == null || style == ChatStyle.VANILLA) {
+            return;
+        }
+        // A claimed cell already got its own line from the claim.
+        if (style == ChatStyle.HIDDEN || claimed) {
+            event.message(null);
+            return;
+        }
+        AdvancementDisplay display = event.getAdvancement().getDisplay();
+        event.message(messages().render("advancement-message",
+                Placeholder.unparsed("player", player.getName()),
+                teamPlaceholder(team),
+                Placeholder.component("advancement", display != null ? display.displayName() : vanilla)));
     }
 
     private void claimAdvancementCell(Round current, Team team, int cell, Player claimer, Advancement advancement) {
@@ -1087,10 +1120,13 @@ public final class Game {
         }
         // Handed back on respawn; on the ground anyone could pick it up.
         event.getDrops().removeIf(this::isCardItem);
-        if (current.state() != Round.State.RUNNING || current.lives() == 0) {
+        boolean counted = current.state() == Round.State.RUNNING && current.lives() > 0;
+        boolean eliminated = counted && current.recordDeath(player.getUniqueId());
+        boolean customLine = styleDeathMessage(event, current, team, counted, eliminated);
+        if (!counted) {
             return;
         }
-        if (!current.recordDeath(player.getUniqueId())) {
+        if (!eliminated) {
             int left = current.livesLeft(player.getUniqueId());
             if (left > 0) {
                 messages().send(player, left == 1 ? "lives-left-one" : "lives-left",
@@ -1100,7 +1136,10 @@ public final class Game {
             return;
         }
         savedGameModes.putIfAbsent(player.getUniqueId(), player.getGameMode());
-        broadcast("player-eliminated", Placeholder.unparsed("player", player.getName()), teamPlaceholder(team));
+        if (!customLine) {
+            // The custom death line already says it; the others do not.
+            broadcast("player-eliminated", Placeholder.unparsed("player", player.getName()), teamPlaceholder(team));
+        }
         messages().console("<hl><player></hl> is out of lives (<team><body>)",
                 Placeholder.unparsed("player", player.getName()), teamPlaceholder(team));
         if (current.teamsStanding(Map.of(team.id(), team.members())).isEmpty()) {
@@ -1110,6 +1149,31 @@ public final class Game {
         // Not from inside the death event: ending the round restores
         // inventories, and the server empties this one right after the event.
         Bukkit.getScheduler().runTask(plugin, () -> checkStanding(current));
+    }
+
+    /**
+     * Swaps the death line as round-chat.deaths says. True when the custom
+     * template went out. A null line means the showDeathMessages game rule is
+     * off, and that stays respected.
+     */
+    private boolean styleDeathMessage(PlayerDeathEvent event, Round current, Team team, boolean counted,
+            boolean eliminated) {
+        ChatStyle style = roundConfig != null ? roundConfig.deathChat() : ChatStyle.CUSTOM;
+        Component vanilla = event.deathMessage();
+        if (vanilla == null || style == ChatStyle.VANILLA) {
+            return false;
+        }
+        if (style == ChatStyle.HIDDEN) {
+            event.deathMessage(null);
+            return false;
+        }
+        String key = eliminated ? "death-message-eliminated" : counted ? "death-message-lives" : "death-message";
+        int left = Math.max(0, current.livesLeft(event.getPlayer().getUniqueId()));
+        event.deathMessage(messages().render(key,
+                Placeholder.component("message", vanilla),
+                teamPlaceholder(team),
+                Placeholder.unparsed("lives", String.valueOf(left))));
+        return true;
     }
 
     /** Puts knocked out players into spectator and hands the card back to the rest. */

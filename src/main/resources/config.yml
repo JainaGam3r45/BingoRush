@@ -20,6 +20,13 @@ lockout: false
 # 0 means unlimited lives, 1 is hardcore.
 lives: 0
 
+# What chat shows when a player in a round dies or gets an advancement.
+# "custom" uses the templates in messages.yml, "vanilla" keeps Minecraft's
+# own line and "hidden" removes it. Players outside the round are left alone.
+round-chat:
+  deaths: custom
+  advancements: custom
+
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
 # clock: the round runs until a team completes the card.

@@ -104,6 +104,13 @@ player-eliminated: "<prefix><hl><player></hl> <body>(<team><body>) se ha quedado
 team-eliminated: "<prefix><body>El equipo <team><body> ha sido eliminado."
 eliminated-spectator: "<prefix><body>Te has quedado sin vidas. Sigue la ronda como espectador."
 eliminated-cannot-join: "<prefix><err>Te has quedado sin vidas en esta ronda. Podrás jugar en la siguiente."
+# Chat lines for players in a round, used when round-chat in config.yml is
+# "custom". <message> is Minecraft's own death line, shown in each player's
+# language. <advancement> is the advancement name with its usual hover text.
+death-message: "<prefix><muted>☠</muted> <body><message>"
+death-message-lives: "<prefix><muted>☠</muted> <body><message> <muted>(vidas: <hl><lives></hl><muted>)"
+death-message-eliminated: "<prefix><err>☠</err> <body><message> <muted>· <err>sin vidas, pasa a espectador</err>"
+advancement-message: "<prefix><hl><player></hl> <muted>(<team><muted>)</muted> <body>ha conseguido el logro <advancement>"
 
 # Match breakdown.
 breakdown:

@@ -51,6 +51,8 @@ public final class BingoConfig {
     private final WinMode winMode;
     private final boolean lockout;
     private final int lives;
+    private final ChatStyle deathChat;
+    private final ChatStyle advancementChat;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
     private final int teamSize;
@@ -70,7 +72,8 @@ public final class BingoConfig {
     private final boolean historyEnabled;
     private final int historyMaxSavedMatches;
 
-    private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives, long timeLimitSeconds,
+    private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives,
+            ChatStyle deathChat, ChatStyle advancementChat, long timeLimitSeconds,
             int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
@@ -81,6 +84,8 @@ public final class BingoConfig {
         this.winMode = winMode;
         this.lockout = lockout;
         this.lives = lives;
+        this.deathChat = deathChat;
+        this.advancementChat = advancementChat;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
         this.teamSize = teamSize;
@@ -129,6 +134,9 @@ public final class BingoConfig {
         if (lives < 0) {
             problems.add("lives is " + lives + ", use 0 for unlimited or 1 for hardcore");
         }
+
+        ChatStyle deathChat = chatStyle(yaml, "round-chat.deaths", problems);
+        ChatStyle advancementChat = chatStyle(yaml, "round-chat.advancements", problems);
 
         long timeLimit = yaml.getLong("time-limit", 1800);
         if (timeLimit < 0) {
@@ -328,7 +336,7 @@ public final class BingoConfig {
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(gameMode, winMode, lockout, lives, timeLimit, countdown, teamSize, clearInventories,
+        return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
                 historyEnabled, historyMaxSavedMatches);
@@ -340,6 +348,24 @@ public final class BingoConfig {
 
     public WinMode winMode() {
         return winMode;
+    }
+
+    private static ChatStyle chatStyle(FileConfiguration yaml, String key, List<String> problems) {
+        String raw = yaml.getString(key, "custom");
+        ChatStyle style = ChatStyle.parse(raw);
+        if (style == null) {
+            problems.add(key + " is '" + raw + "', use 'custom', 'vanilla' or 'hidden'");
+            return ChatStyle.CUSTOM;
+        }
+        return style;
+    }
+
+    public ChatStyle deathChat() {
+        return deathChat;
+    }
+
+    public ChatStyle advancementChat() {
+        return advancementChat;
     }
 
     /** Lives per player in a round; 0 for unlimited. */

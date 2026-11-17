@@ -88,7 +88,7 @@ public final class RoundListener implements Listener {
 
     @EventHandler
     public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
-        game.checkAdvancementClaim(event.getPlayer(), event.getAdvancement());
+        game.advancementDone(event);
     }
 
     /** Right click with the card item opens the card, nothing else happens. */
