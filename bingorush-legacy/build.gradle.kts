@@ -46,12 +46,32 @@ dependencies {
     implementation("com.github.cryptomorin:XSeries:14.0.0") {
         isTransitive = false
     }
+
+    testImplementation("org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT")
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-tasks.withType<JavaCompile>().configureEach {
+tasks.test {
+    useJUnitPlatform()
+}
+
+tasks.compileJava {
     options.release = 8
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:-options"))
+}
+
+tasks.named<JavaCompile>("compileV1_12Java") {
+    options.release = 8
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:-options"))
+}
+
+tasks.compileTestJava {
+    options.release = 25
+    options.encoding = "UTF-8"
 }
 
 tasks.processResources {
