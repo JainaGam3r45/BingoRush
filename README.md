@@ -2,14 +2,19 @@
 
 Bingo minigame for Minecraft event servers running Paper 26.3.
 
-Teams compete on a shared 5x5 bingo card to collect items scattered around the world. The first team to complete a line or the entire card wins the round.
+Teams compete on a shared 5x5 card. The first team to complete a line or the whole card wins the round.
 
 ## How it works
 
-- Cards are generated from an item pool split into difficulty tiers (easy, medium, hard, epic).
-- Seeds can be numeric or plain text (such as an event name), which makes it easy to replay boards or run identical cards across multiple instances.
-- Win modes include line completion (rows, columns and diagonals) or full card completion.
-- When time expires without a completion, the leader is the team with the most claimed items, with ties broken by the earlier claim.
+- Two game modes: collect items, or complete vanilla advancements during the round.
+- Cards come from a pool split into difficulty tiers (easy, medium, hard, epic). Seeds can be numbers or plain text, such as an event name, so a board can be replayed or shared between servers.
+- Win by completing a line (row, column or diagonal) or the full card.
+- Lockout makes every cell exclusive: the first team to claim it keeps it, and on a full card 13 cells win.
+- Lives turn deaths into knockouts. A player who runs out watches as a spectator, and the last team standing wins. One life is hardcore.
+- When time runs out, the team with the most cells wins, and the earlier last claim breaks a tie.
+- The card also shows up as its own tab in the advancements screen, with your team's cells marked as done.
+- An unfinished round is saved to disk and comes back paused after a crash or restart.
+- Finished matches are logged to `data/matches/` and can be browsed in game.
 
 ## Requirements
 
@@ -18,46 +23,43 @@ Teams compete on a shared 5x5 bingo card to collect items scattered around the w
 
 ## Building
 
-Build the jar using the Gradle wrapper:
-
 ```bash
 ./gradlew build
 ```
 
-The compiled plugin jar will be generated in `build/libs/BingoRush-0.1.0.jar`.
+The jar ends up in `build/libs/`, named after the version, for example `BingoRush-0.2.0.jar`.
 
 ## Commands and permissions
 
-Player commands:
+Player commands (`bingo.play`):
 
-- `/bingo`: displays available commands and plugin help.
-- `/bingo join [team]`: joins a team, or the next available team if omitted (`bingo.play`).
-- `/bingo card`: opens the round card, with each cell showing who claimed it (`bingo.play`).
-- `/bingo leave`: leaves the current team (`bingo.play`).
-- `/bingo version`: displays current plugin version and checks for updates.
+- `/bingo` or `/b`: help.
+- `/bingo join [team]`: joins a team, or lets you pick one when several have room.
+- `/bingo teams` or `/teams`: team selector menu.
+- `/bingo card` or `/card`: opens your team's card.
+- `/bingo coords` or `/bingo c`: sends your coordinates to your team.
+- `/bingo leave`: leaves your team.
+- `/bingo version`: shows the installed version; admins also get an update check.
 
 Admin commands (`bingo.admin`):
 
-- `/bingo start [seed]`: starts a new round with an optional seed.
-- `/bingo stop`: stops the active round.
-- `/bingo pause`: pauses the round in progress.
-- `/bingo resume`: resumes a paused round.
+- `/bingo setup` or `/setup`: panel to pick mode, win condition, lockout, lives and time limit, then start.
+- `/bingo start [items|advancements] [lockout:true|false] [seed]`: starts a round.
+- `/bingo stop`, `/bingo pause`, `/bingo resume`: control the running round.
 - `/bingo reroll`: prepares a new card for the next round.
-- `/bingo teams <add|remove|join|clear>`: manages teams and player assignments.
-- `/bingo reload`: reloads `config.yml` and `messages.yml`.
+- `/bingo card <team>`: watches a team's card, for casters.
+- `/bingo teams <add|remove|join|clear>`: manages teams and assignments.
+- `/bingo history [page|id]`, `/bingo history clear`, `/bingo export <id>`: match history.
+- `/bingo reload`: rereads `config.yml` and `messages.yml`.
 
-### Permissions
-
-- `bingo.play`: allows joining teams and playing the game (default: true).
-- `bingo.admin`: allows starting, stopping and configuring rounds (default: op).
-- `bingo.update`: receives update notifications on join when a new version is available (default: op).
+`bingo.update` (default: op) receives update notices on join.
 
 ## Configuration
 
-Settings are stored in `plugins/BingoRush/`:
+Files live in `plugins/BingoRush/`. New keys are added to existing files on startup and your values are kept.
 
-- `config.yml`: game settings, round duration, win mode and item pool tiers with their cell counts.
-- `messages.yml`: player-facing messages in MiniMessage format, with an editable color palette at the top.
+- `config.yml`: game mode, win mode, lockout, lives, time limit, teams, item and advancement pools, sounds, round chat, the advancements tab, update checks and history.
+- `messages.yml`: everything players read, in MiniMessage, with the color palette at the top.
 
 ## License and credits
 
