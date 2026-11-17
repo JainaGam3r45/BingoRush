@@ -31,7 +31,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.advancement.Advancement;
@@ -259,15 +258,35 @@ public final class Advancements implements AdvancementSupport, Listener {
     }
 
     // The icon field was "item" until 1.20.5 and "id" after. The server
-    // rejects the wrong one, so the other is tried before giving up.
-    @SuppressWarnings("deprecation")
+    // rejects the wrong one, so the other is tried before giving up. An icon
+    // the version does not know (card keys use today's item ids) falls back
+    // to paper for that one cell.
     private Advancement load(NamespacedKey key, JsonObject json) {
+        try {
+            return loadEitherShape(key, json);
+        } catch (RuntimeException e) {
+            JsonObject display = json.getAsJsonObject("display");
+            if ("minecraft:paper".equals(display.get("icon").getAsString())) {
+                throw e;
+            }
+            display.addProperty("icon", "minecraft:paper");
+            return loadEitherShape(key, json);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private Advancement loadEitherShape(NamespacedKey key, JsonObject json) {
         boolean idFirst = ServerVersion.atLeast(20, 5);
         Advancement loaded;
         try {
             loaded = Bukkit.getUnsafe().loadAdvancement(key, shape(json, idFirst).toString());
         } catch (RuntimeException firstFailure) {
-            loaded = Bukkit.getUnsafe().loadAdvancement(key, shape(json, !idFirst).toString());
+            try {
+                loaded = Bukkit.getUnsafe().loadAdvancement(key, shape(json, !idFirst).toString());
+            } catch (RuntimeException secondFailure) {
+                secondFailure.addSuppressed(firstFailure);
+                throw new IllegalStateException(firstFailure.getMessage() + " / " + secondFailure.getMessage(), secondFailure);
+            }
         }
         loadedKeys.add(key);
         return loaded;
@@ -379,12 +398,9 @@ public final class Advancements implements AdvancementSupport, Listener {
             detail = Component.translatable("advancements." + key.substring(key.indexOf(':') + 1).replace('/', '.') + ".description");
             icon = "minecraft:paper";
         } else {
-            BingoConfig config = plugin.bingoConfig();
-            Material material = config != null && config.material(key) != null ? config.material(key).get() : null;
             name = Component.text(prettyKey(key));
             detail = plugin.messages().render("card-tab-cell-item");
-            icon = material != null && ServerVersion.atLeast(13) ? key : "minecraft:" + (material != null
-                    ? material.name().toLowerCase(Locale.ROOT) : "barrier");
+            icon = key;
         }
         JsonObject display = display(
                 plugin.messages().render("card-tab-cell-title",
