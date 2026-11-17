@@ -38,7 +38,9 @@ public final class BingoConfig {
         WIN,
         COUNTDOWN,
         START,
-        LOCKOUT_LOST;
+        LOCKOUT_LOST,
+        MENU_CLICK,
+        TEAM_CHIME;
 
         String configKey() {
             return name().toLowerCase(Locale.ROOT).replace('_', '-');

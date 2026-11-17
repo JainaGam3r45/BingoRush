@@ -284,6 +284,11 @@ public final class Hud {
                 : Math.max(0.0f, Math.min(1.0f, (float) remainingMs / (float) totalMs)));
     }
 
+    /** Plays the configured sound to one player, for menu feedback. */
+    public void play(BingoConfig.SoundId id, Player player) {
+        play(id, List.of(player));
+    }
+
     private void play(BingoConfig.SoundId id, Iterable<? extends Player> to) {
         BingoConfig config = plugin.bingoConfig();
         if (config == null) {

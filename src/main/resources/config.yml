@@ -39,9 +39,9 @@ scatter-radius: 24
 late-join: join
 
 # Teams for the event. Each one has a name and a color, and players join with
-# /bingo join or /bingo join <team>. With no teams here, the plugin
-# invents one per group as players join. Teams added at runtime with
-# /bingo teams last until the server restarts.
+# /bingo join, /bingo join <team> or the /bingo teams menu. With no teams
+# here, the plugin invents one per group as players join. Teams added at
+# runtime with /bingo teams add last until the server restarts.
 teams:
   - name: Rojo
     color: "#FF5555"
@@ -190,6 +190,9 @@ sounds:
   countdown: block.note_block.pling
   start: block.beacon.activate
   lockout-lost: block.note_block.bass
+  # Menus: clicks in the lobby menus and the chime for joining a team.
+  menu-click: ui.button.click
+  team-chime: block.note_block.chime
 
 # Update notifications from the GitHub repository.
 # Checks run asynchronously in the background so they never slow down the server.

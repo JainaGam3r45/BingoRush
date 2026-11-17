@@ -24,9 +24,10 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand {
 
-    private static final List<String> PLAYER_HELP = List.of("join", "card", "leave", "coords", "version");
+    private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "coords", "version");
     private static final List<String> ADMIN_HELP = List.of(
-            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams", "history", "export", "reload");
+            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams-admin",
+            "history", "export", "reload");
 
     private final BingoRush plugin;
     private final Game game;
@@ -99,20 +100,31 @@ public final class BingoCommand {
                             plugin.messages().send(sender, "reloaded");
                         })))
                 .then(Commands.literal("teams")
-                        .requires(this::isAdmin)
-                        .executes(ctx -> run(ctx, game::listTeams))
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> {
+                            // Players get the menu; the console keeps the chat list.
+                            if (ctx.getSource().getExecutor() instanceof Player player) {
+                                game.openTeamMenu(player);
+                            } else {
+                                game.listTeams(ctx.getSource().getSender());
+                            }
+                            return Command.SINGLE_SUCCESS;
+                        })
                         .then(Commands.literal("add")
+                                .requires(this::isAdmin)
                                 .then(Commands.argument("name", StringArgumentType.string())
                                         .then(Commands.argument("color", ArgumentTypes.hexColor())
                                                 .executes(ctx -> run(ctx, sender -> game.createTeam(sender,
                                                         StringArgumentType.getString(ctx, "name"),
                                                         ctx.getArgument("color", TextColor.class)))))))
                         .then(Commands.literal("remove")
+                                .requires(this::isAdmin)
                                 .then(Commands.argument("name", StringArgumentType.string())
                                         .suggests(this::suggestTeams)
                                         .executes(ctx -> run(ctx, sender -> game.removeTeam(sender,
                                                 StringArgumentType.getString(ctx, "name"))))))
                         .then(Commands.literal("join")
+                                .requires(this::isAdmin)
                                 .then(Commands.argument("player", ArgumentTypes.player())
                                         .then(Commands.argument("team", StringArgumentType.string())
                                                 .suggests(this::suggestTeams)
@@ -129,6 +141,7 @@ public final class BingoCommand {
                                                     });
                                                 }))))
                         .then(Commands.literal("clear")
+                                .requires(this::isAdmin)
                                 .executes(ctx -> run(ctx, game::clearTeams))))
                 .then(Commands.literal("history")
                         .requires(this::isAdmin)
@@ -155,6 +168,13 @@ public final class BingoCommand {
         return Commands.literal(alias)
                 .requires(this::isPlayerAllowed)
                 .executes(ctx -> runForPlayer(ctx, game::openCard))
+                .build();
+    }
+
+    public LiteralCommandNode<CommandSourceStack> buildTeamAlias(String alias) {
+        return Commands.literal(alias)
+                .requires(this::isPlayerAllowed)
+                .executes(ctx -> runForPlayer(ctx, game::openTeamMenu))
                 .build();
     }
 

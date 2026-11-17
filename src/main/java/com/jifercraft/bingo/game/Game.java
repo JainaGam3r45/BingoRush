@@ -50,6 +50,7 @@ public final class Game {
     private final BingoRush plugin;
     private final Teams teams;
     private final CardMenu cardMenu;
+    private final TeamMenu teamMenu;
     private final NamespacedKey cardTag;
     private final NamespacedKey cardItemTag;
     private final Hud hud;
@@ -72,6 +73,7 @@ public final class Game {
         this.cardTag = new NamespacedKey(plugin, "card-menu");
         this.cardItemTag = new NamespacedKey(plugin, "card-item");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
+        this.teamMenu = new TeamMenu(plugin, this, new NamespacedKey(plugin, "team-menu"));
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
     }
@@ -121,6 +123,25 @@ public final class Game {
         messages().send(player, "card-opened-spectator", teamPlaceholder(target));
     }
 
+    /** True when the view is the lobby team menu. */
+    public boolean isTeamMenuView(InventoryView view) {
+        return teamMenu.isMenuItem(view.getTopInventory().getItem(0));
+    }
+
+    /** Opens the lobby team menu, where players join or switch teams. */
+    public void openTeamMenu(Player player) {
+        teamMenu.open(player);
+    }
+
+    public void teamMenuClick(Player player, ItemStack stack) {
+        teamMenu.click(player, stack);
+    }
+
+    /** A configured sound for one player, for menu feedback. */
+    public void playSound(Player player, BingoConfig.SoundId id) {
+        hud.play(id, player);
+    }
+
     public void startRound(CommandSender caller, String seedArg) {
         startRound(caller, null, null, seedArg);
     }
@@ -161,6 +182,8 @@ public final class Game {
         }
         roundConfig = config;
         round = new Round(seed, mode, card, new ClaimBoard(config.winMode(), lockout));
+        // The lobby menus are gone the moment a round exists, countdown included.
+        teamMenu.closeAll();
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -280,6 +303,7 @@ public final class Game {
         }
         target.add(player.getUniqueId());
         messages().send(player, "team-joined", teamPlaceholder(target));
+        teamMenu.refreshAll();
         if (current != null) {
             // Joined during the countdown or a round that allows late play.
             giveCardItem(player);
@@ -295,6 +319,7 @@ public final class Game {
         }
         team.remove(player.getUniqueId());
         messages().send(player, "team-left");
+        teamMenu.refreshAll();
         if (round != null) {
             hud.playerLeft(player);
             removeCardItems(player);
@@ -380,6 +405,7 @@ public final class Game {
         try {
             Team team = teams.create(name, color);
             messages().send(caller, "team-created", teamPlaceholder(team));
+            teamMenu.refreshAll();
         } catch (IllegalArgumentException e) {
             messages().send(caller, "team-name-taken", Placeholder.unparsed("name", name));
         }
@@ -397,6 +423,7 @@ public final class Game {
         }
         teams.remove(team);
         messages().send(caller, "team-removed", teamPlaceholder(team));
+        teamMenu.refreshAll();
     }
 
     public void assignPlayer(CommandSender caller, Player target, String teamName) {
@@ -415,6 +442,7 @@ public final class Game {
             old.remove(target.getUniqueId());
         }
         team.add(target.getUniqueId());
+        teamMenu.refreshAll();
         messages().send(caller, "team-assigned",
                 Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
         messages().send(target, "team-joined", teamPlaceholder(team));
@@ -426,6 +454,7 @@ public final class Game {
                 team.remove(member);
             }
         }
+        teamMenu.refreshAll();
         messages().send(caller, "team-cleared");
     }
 
@@ -603,6 +632,7 @@ public final class Game {
         }
         cancelTasks();
         cardMenu.closeAll();
+        teamMenu.closeAll();
         hud.hideAll();
         if (round == null) {
             restoreInventories();
@@ -612,9 +642,10 @@ public final class Game {
         roundConfig = null;
     }
 
-    /** A player closed their card menu; stop tracking it. */
-    public void cardMenuClosed(UUID playerId) {
+    /** A player closed one of our menus; stop tracking it everywhere. */
+    public void menuClosed(UUID playerId) {
         cardMenu.forget(playerId);
+        teamMenu.forget(playerId);
     }
 
     private long nextSeed() {
@@ -628,6 +659,11 @@ public final class Game {
 
     private int cap(BingoConfig config) {
         return config == null ? Integer.MAX_VALUE : config.teamSize();
+    }
+
+    /** The configured players-per-team cap, for menus that show it. */
+    public int teamSizeCap() {
+        return cap(plugin.bingoConfig());
     }
 
     private void tickCountdown() {

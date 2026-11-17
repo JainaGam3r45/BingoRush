@@ -48,6 +48,16 @@ public final class RoundListener implements Listener {
             event.setCancelled(true);
             return;
         }
+        // The lobby menus are read only too: the click runs the action the
+        // item carries, and everything else in the view is blocked.
+        if (game.isTeamMenuView(event.getView())) {
+            event.setCancelled(true);
+            if (event.getClickedInventory() == event.getView().getTopInventory()
+                    && event.getWhoClicked() instanceof Player player) {
+                game.teamMenuClick(player, event.getCurrentItem());
+            }
+            return;
+        }
         if (event.getWhoClicked() instanceof Player player) {
             game.checkClaims(player);
         }
@@ -55,7 +65,8 @@ public final class RoundListener implements Listener {
 
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
-        if (game.isCardMenuView(event.getView())) {
+        if (game.isCardMenuView(event.getView())
+                || game.isTeamMenuView(event.getView())) {
             event.setCancelled(true);
         }
     }
@@ -134,15 +145,15 @@ public final class RoundListener implements Listener {
         game.playerJoined(event.getPlayer());
     }
 
-    /** An open card menu nobody can see anymore is not refreshed. */
+    /** An open menu nobody can see anymore is not refreshed. */
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
-        game.cardMenuClosed(event.getPlayer().getUniqueId());
+        game.menuClosed(event.getPlayer().getUniqueId());
     }
 
     /** In case the close event slips past, the quit event drops the menu too. */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        game.cardMenuClosed(event.getPlayer().getUniqueId());
+        game.menuClosed(event.getPlayer().getUniqueId());
     }
 }
