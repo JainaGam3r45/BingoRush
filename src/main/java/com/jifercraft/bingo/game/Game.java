@@ -5,6 +5,7 @@ import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.card.CardGenerator;
 import com.jifercraft.bingo.card.ClaimBoard;
 import com.jifercraft.bingo.card.ItemPool;
+import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
@@ -51,6 +52,7 @@ public final class Game {
     private final Teams teams;
     private final CardMenu cardMenu;
     private final TeamMenu teamMenu;
+    private final SetupMenu setupMenu;
     private final NamespacedKey cardTag;
     private final NamespacedKey cardItemTag;
     private final Hud hud;
@@ -64,6 +66,7 @@ public final class Game {
     private Long pendingSeed;
     private Round round;
     private BingoConfig roundConfig;
+    private long roundTimeLimit;
     private int secondsLeft;
     private boolean roundRestoredUnfinished;
 
@@ -74,6 +77,7 @@ public final class Game {
         this.cardItemTag = new NamespacedKey(plugin, "card-item");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
         this.teamMenu = new TeamMenu(plugin, this, new NamespacedKey(plugin, "team-menu"));
+        this.setupMenu = new SetupMenu(plugin, this, new NamespacedKey(plugin, "setup-menu"));
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
     }
@@ -128,13 +132,27 @@ public final class Game {
         return teamMenu.isMenuItem(view.getTopInventory().getItem(0));
     }
 
+    /** True when the view is the host setup panel. */
+    public boolean isSetupMenuView(InventoryView view) {
+        return setupMenu.isMenuItem(view.getTopInventory().getItem(0));
+    }
+
     /** Opens the lobby team menu, where players join or switch teams. */
     public void openTeamMenu(Player player) {
         teamMenu.open(player);
     }
 
+    /** Opens the host panel for round settings and launch. */
+    public void openSetupMenu(Player player) {
+        setupMenu.open(player);
+    }
+
     public void teamMenuClick(Player player, ItemStack stack) {
         teamMenu.click(player, stack);
+    }
+
+    public void setupMenuClick(Player player, ItemStack stack) {
+        setupMenu.click(player, stack);
     }
 
     /** A configured sound for one player, for menu feedback. */
@@ -142,15 +160,17 @@ public final class Game {
         hud.play(id, player);
     }
 
-    public void startRound(CommandSender caller, String seedArg) {
-        startRound(caller, null, null, seedArg);
-    }
-
-    public void startRound(CommandSender caller, BingoGameMode modeOverride, String seedArg) {
-        startRound(caller, modeOverride, null, seedArg);
-    }
-
     public void startRound(CommandSender caller, BingoGameMode modeOverride, Boolean lockoutOverride, String seedArg) {
+        startRound(caller, modeOverride, null, lockoutOverride, null, seedArg);
+    }
+
+    /**
+     * Starts a round, optionally overriding single settings. The host panel
+     * passes its four picks; the command passes null for whatever it did not
+     * name, which falls back to config.yml.
+     */
+    public void startRound(CommandSender caller, BingoGameMode modeOverride, WinMode winModeOverride,
+            Boolean lockoutOverride, Long timeLimitOverride, String seedArg) {
         if (round != null) {
             messages().send(caller, "round-already-running");
             return;
@@ -161,7 +181,9 @@ public final class Game {
             return;
         }
         BingoGameMode mode = modeOverride != null ? modeOverride : config.gameMode();
+        WinMode winMode = winModeOverride != null ? winModeOverride : config.winMode();
         boolean lockout = lockoutOverride != null ? lockoutOverride : config.lockout();
+        roundTimeLimit = timeLimitOverride != null ? timeLimitOverride : config.timeLimitSeconds();
         long seed = seedArg != null && !seedArg.isBlank()
                 ? CardGenerator.seedFrom(seedArg)
                 : nextSeed();
@@ -181,9 +203,10 @@ public final class Game {
             return;
         }
         roundConfig = config;
-        round = new Round(seed, mode, card, new ClaimBoard(config.winMode(), lockout));
+        round = new Round(seed, mode, card, new ClaimBoard(winMode, lockout));
         // The lobby menus are gone the moment a round exists, countdown included.
         teamMenu.closeAll();
+        setupMenu.closeAll();
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -633,6 +656,7 @@ public final class Game {
         cancelTasks();
         cardMenu.closeAll();
         teamMenu.closeAll();
+        setupMenu.closeAll();
         hud.hideAll();
         if (round == null) {
             restoreInventories();
@@ -646,6 +670,7 @@ public final class Game {
     public void menuClosed(UUID playerId) {
         cardMenu.forget(playerId);
         teamMenu.forget(playerId);
+        setupMenu.forget(playerId);
     }
 
     private long nextSeed() {
@@ -703,7 +728,7 @@ public final class Game {
         broadcast("round-started-chat");
         plugin.getLogger().info("Round started (" + round.mode().name().toLowerCase(Locale.ROOT)
                 + "), seed " + round.seed());
-        hud.roundStarted(roundConfig.timeLimitSeconds());
+        hud.roundStarted(roundTimeLimit);
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
         // The events catch most claims, but /give and friends fire nothing,
         // so every second the plugin looks at every team member's inventory.
@@ -723,7 +748,7 @@ public final class Game {
                 pointCompass(player, false);
             }
         }
-        long remaining = current.remainingMs(roundConfig.timeLimitSeconds());
+        long remaining = current.remainingMs(roundTimeLimit);
         if (remaining <= 0) {
             finishByTimeout();
         }
@@ -787,7 +812,7 @@ public final class Game {
         if (round == null) {
             return;
         }
-        long limit = roundConfig != null ? roundConfig.timeLimitSeconds() : 0;
+        long limit = roundTimeLimit;
         try {
             RoundStorage.save(activeRoundFile, round, limit, savedInventories);
         } catch (Exception e) {
@@ -803,6 +828,7 @@ public final class Game {
             RoundStorage.RestoredRound restored = RoundStorage.load(activeRoundFile);
             this.round = restored.round();
             this.roundConfig = plugin.bingoConfig();
+            this.roundTimeLimit = restored.timeLimitSeconds();
             this.savedInventories.clear();
             this.savedInventories.putAll(restored.savedInventories());
             this.roundRestoredUnfinished = true;

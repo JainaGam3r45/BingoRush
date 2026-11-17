@@ -50,11 +50,17 @@ public final class RoundListener implements Listener {
         }
         // The lobby menus are read only too: the click runs the action the
         // item carries, and everything else in the view is blocked.
-        if (game.isTeamMenuView(event.getView())) {
+        boolean teamMenu = game.isTeamMenuView(event.getView());
+        boolean setupMenu = !teamMenu && game.isSetupMenuView(event.getView());
+        if (teamMenu || setupMenu) {
             event.setCancelled(true);
             if (event.getClickedInventory() == event.getView().getTopInventory()
                     && event.getWhoClicked() instanceof Player player) {
-                game.teamMenuClick(player, event.getCurrentItem());
+                if (teamMenu) {
+                    game.teamMenuClick(player, event.getCurrentItem());
+                } else {
+                    game.setupMenuClick(player, event.getCurrentItem());
+                }
             }
             return;
         }
@@ -66,7 +72,8 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
         if (game.isCardMenuView(event.getView())
-                || game.isTeamMenuView(event.getView())) {
+                || game.isTeamMenuView(event.getView())
+                || game.isSetupMenuView(event.getView())) {
             event.setCancelled(true);
         }
     }

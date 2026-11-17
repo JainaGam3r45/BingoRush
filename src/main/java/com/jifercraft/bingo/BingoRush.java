@@ -46,6 +46,7 @@ public final class BingoRush extends JavaPlugin {
             event.registrar().register(bingoCmd.build(), "Bingo minigame", java.util.List.of("b"));
             event.registrar().register(bingoCmd.buildCardAlias("card"));
             event.registrar().register(bingoCmd.buildTeamAlias("teams"));
+            event.registrar().register(bingoCmd.buildSetupAlias("setup"));
         });
 
         updateChecker = new UpdateChecker(this);

@@ -26,7 +26,7 @@ public final class BingoCommand {
 
     private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "coords", "version");
     private static final List<String> ADMIN_HELP = List.of(
-            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams-admin",
+            "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
             "history", "export", "reload");
 
     private final BingoRush plugin;
@@ -86,6 +86,9 @@ public final class BingoCommand {
                                 .suggests(this::suggestStartArgs)
                                 .executes(ctx -> run(ctx, sender -> handleStart(sender,
                                         null, StringArgumentType.getString(ctx, "args"))))))
+                .then(Commands.literal("setup")
+                        .requires(this::isAdmin)
+                        .executes(ctx -> runForPlayer(ctx, game::openSetupMenu)))
                 .then(Commands.literal("stop").requires(this::isAdmin)
                         .executes(ctx -> run(ctx, game::stopRound)))
                 .then(Commands.literal("pause").requires(this::isAdmin)
@@ -175,6 +178,13 @@ public final class BingoCommand {
         return Commands.literal(alias)
                 .requires(this::isPlayerAllowed)
                 .executes(ctx -> runForPlayer(ctx, game::openTeamMenu))
+                .build();
+    }
+
+    public LiteralCommandNode<CommandSourceStack> buildSetupAlias(String alias) {
+        return Commands.literal(alias)
+                .requires(this::isAdmin)
+                .executes(ctx -> runForPlayer(ctx, game::openSetupMenu))
                 .build();
     }
 
