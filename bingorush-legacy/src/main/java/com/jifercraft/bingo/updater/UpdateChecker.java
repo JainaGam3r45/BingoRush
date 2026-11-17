@@ -43,45 +43,75 @@ public final class UpdateChecker implements Listener {
 
     private final BingoRush plugin;
     private final Version currentVersion;
+    private final UpdateCheckPolicy policy;
     private BukkitTask periodicTask;
     private volatile Version latestVersion;
     private volatile String downloadUrl = RELEASES_URL;
     private volatile boolean updateAvailable;
+    private volatile CheckResult lastResult;
     // Senders waiting on the check that is already running; main thread only.
     private List<CommandSender> waiting;
 
     public UpdateChecker(BingoRush plugin) {
+        this(plugin, Version.parse(plugin.getDescription().getVersion()), new UpdateCheckPolicy());
+    }
+
+    UpdateChecker(BingoRush plugin, Version currentVersion) {
+        this(plugin, currentVersion, new UpdateCheckPolicy());
+    }
+
+    UpdateChecker(BingoRush plugin, Version currentVersion, UpdateCheckPolicy policy) {
         this.plugin = plugin;
-        this.currentVersion = Version.parse(plugin.getDescription().getVersion());
+        this.currentVersion = currentVersion;
+        this.policy = policy;
     }
 
     /**
      * Starts a check, or joins the one already running. With a sender, they
-     * get an answer either way. Call from the main thread.
+     * get an answer either way. Call from the main thread. Calls within the
+     * throttle interval reuse the last outcome to avoid rate limits.
      */
     public void check(CommandSender feedback) {
-        if (feedback != null) {
-            plugin.messages().send(feedback, "update-checking");
-        }
-        if (waiting != null) {
-            if (feedback != null) {
-                waiting.add(feedback);
+        long now = System.currentTimeMillis();
+        synchronized (this) {
+            if (!policy.shouldCheck(now) && lastResult != null) {
+                if (feedback != null) {
+                    reply(lastResult, feedback);
+                }
+                return;
             }
-            return;
+            if (feedback != null) {
+                plugin.messages().send(feedback, "update-checking");
+            }
+            if (waiting != null) {
+                if (feedback != null) {
+                    waiting.add(feedback);
+                }
+                return;
+            }
+            waiting = new ArrayList<>();
         }
-        waiting = new ArrayList<>();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             CheckResult result = query();
+            synchronized (this) {
+                policy.recordCheck(System.currentTimeMillis());
+            }
             if (!plugin.isEnabled()) {
                 return;
             }
             Bukkit.getScheduler().runTask(plugin, () -> {
-                List<CommandSender> askers = waiting;
-                waiting = null;
+                List<CommandSender> askers;
+                synchronized (this) {
+                    lastResult = result;
+                    askers = waiting;
+                    waiting = null;
+                }
                 announce(result, feedback);
                 reply(result, feedback);
-                for (CommandSender asker : askers) {
-                    reply(result, asker);
+                if (askers != null) {
+                    for (CommandSender asker : askers) {
+                        reply(result, asker);
+                    }
                 }
             });
         });
@@ -184,9 +214,11 @@ public final class UpdateChecker implements Listener {
         if (remote.isNewerThan(currentVersion)) {
             latestVersion = remote;
             updateAvailable = true;
+            lastResult = CheckResult.UPDATE_FOUND;
             return CheckResult.UPDATE_FOUND;
         }
         updateAvailable = false;
+        lastResult = CheckResult.UP_TO_DATE;
         return CheckResult.UP_TO_DATE;
     }
 
@@ -293,5 +325,13 @@ public final class UpdateChecker implements Listener {
 
     public Version currentVersion() {
         return currentVersion;
+    }
+
+    public CheckResult lastResult() {
+        return lastResult;
+    }
+
+    public UpdateCheckPolicy policy() {
+        return policy;
     }
 }

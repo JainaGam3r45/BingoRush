@@ -37,20 +37,27 @@ public final class UpdateChecker implements Listener {
     private final BingoRush plugin;
     private final Version currentVersion;
     private final HttpClient httpClient;
+    private final UpdateCheckPolicy policy;
 
     private BukkitTask periodicTask;
     private volatile Version latestVersion;
     private volatile String downloadUrl = RELEASES_URL;
     private volatile boolean updateAvailable;
+    private volatile CheckResult lastResult;
     private CompletableFuture<CheckResult> inFlight;
 
     public UpdateChecker(BingoRush plugin) {
-        this(plugin, Version.parse(plugin.getPluginMeta().getVersion()));
+        this(plugin, Version.parse(plugin.getPluginMeta().getVersion()), new UpdateCheckPolicy());
     }
 
     UpdateChecker(BingoRush plugin, Version currentVersion) {
+        this(plugin, currentVersion, new UpdateCheckPolicy());
+    }
+
+    UpdateChecker(BingoRush plugin, Version currentVersion, UpdateCheckPolicy policy) {
         this.plugin = plugin;
         this.currentVersion = currentVersion;
+        this.policy = policy;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -65,9 +72,19 @@ public final class UpdateChecker implements Listener {
      * Checks GitHub for a newer release, or the highest tag while no stable
      * release exists, off the main thread. With a sender, they get a reply
      * either way; a sender who asks while a check is already running gets the
-     * result of that one instead of a second request.
+     * result of that one instead of a second request. Calls within the
+     * throttle interval reuse the last outcome to avoid rate limits.
      */
     public CompletableFuture<CheckResult> check(CommandSender feedback) {
+        long now = System.currentTimeMillis();
+        synchronized (this) {
+            if (!policy.shouldCheck(now) && lastResult != null) {
+                if (feedback != null) {
+                    onMainThread(() -> reply(lastResult, feedback));
+                }
+                return CompletableFuture.completedFuture(lastResult);
+            }
+        }
         if (feedback != null) {
             plugin.messages().send(feedback, "update-checking");
         }
@@ -83,6 +100,10 @@ public final class UpdateChecker implements Listener {
         if (started) {
             running.whenComplete((result, error) -> {
                 synchronized (this) {
+                    policy.recordCheck(System.currentTimeMillis());
+                    if (result != null) {
+                        lastResult = result;
+                    }
                     inFlight = null;
                 }
             });
@@ -187,9 +208,11 @@ public final class UpdateChecker implements Listener {
         if (remote.isNewerThan(currentVersion)) {
             this.latestVersion = remote;
             this.updateAvailable = true;
+            this.lastResult = CheckResult.UPDATE_FOUND;
             return CheckResult.UPDATE_FOUND;
         } else {
             this.updateAvailable = false;
+            this.lastResult = CheckResult.UP_TO_DATE;
             return CheckResult.UP_TO_DATE;
         }
     }
@@ -317,5 +340,13 @@ public final class UpdateChecker implements Listener {
 
     public String downloadUrl() {
         return downloadUrl;
+    }
+
+    public CheckResult lastResult() {
+        return lastResult;
+    }
+
+    public UpdateCheckPolicy policy() {
+        return policy;
     }
 }

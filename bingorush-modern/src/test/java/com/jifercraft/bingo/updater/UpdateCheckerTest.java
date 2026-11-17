@@ -44,4 +44,16 @@ class UpdateCheckerTest {
         assertEquals(releases, UpdateChecker.clickableLink(releases + "/tag/v1<click:run_command:'/op x'>"));
         assertEquals(releases, UpdateChecker.clickableLink("https://example.invalid/x"));
     }
+
+    @Test
+    void reusesCachedResultWithinThrottleInterval() throws Exception {
+        UpdateCheckPolicy policy = new UpdateCheckPolicy(60_000L);
+        UpdateChecker checker = new UpdateChecker(null, Version.parse("0.2.0-pre.2"), policy);
+        checker.handleTagsJson("[{\"name\":\"v0.2.0-pre.2\"}]");
+        policy.recordCheck(System.currentTimeMillis());
+
+        var future = checker.check();
+        org.junit.jupiter.api.Assertions.assertTrue(future.isDone());
+        assertEquals(UpdateChecker.CheckResult.UP_TO_DATE, future.get());
+    }
 }
