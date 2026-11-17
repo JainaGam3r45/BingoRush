@@ -177,7 +177,6 @@ public final class Game {
         setupMenu.click(player, stack);
     }
 
-    /** A configured sound for one player, for menu feedback. */
     private void loadAdvancementTab() {
         if (round == null || roundConfig == null || !roundConfig.advancementTab()) {
             return;
@@ -208,6 +207,7 @@ public final class Game {
         cardAdvancements.retire();
     }
 
+    /** A configured sound for one player, for menu feedback. */
     public void playSound(Player player, BingoConfig.SoundId id) {
         hud.play(id, player);
     }
@@ -1382,10 +1382,7 @@ public final class Game {
         if (first != null) {
             Team claimerTeam = teams.byId(first.teamId());
             String itemKey = current.card().item(first.cell());
-            ItemType type = roundConfig.itemType(itemKey);
-            TagResolver item = Placeholder.component("item", type == null
-                    ? Component.text(itemKey)
-                    : Component.translatable(type));
+            TagResolver item = Placeholder.component("item", cellName(current, itemKey));
             TagResolver teamTag = claimerTeam != null ? teamPlaceholder(claimerTeam) : Placeholder.unparsed("team", "?");
             broadcast("breakdown.first-claim", item, teamTag, Placeholder.unparsed("time", clock(first.elapsedMs())));
         } else {
@@ -1394,6 +1391,18 @@ public final class Game {
 
         broadcast("breakdown.total-time", Placeholder.unparsed("time", clock(current.elapsedMs())));
         broadcast("breakdown.separator");
+    }
+
+    // An advancement round keeps advancement keys in the cells, which the
+    // item registry does not know; those show the advancement title.
+    private Component cellName(Round current, String key) {
+        if (current.mode() == BingoGameMode.ADVANCEMENTS) {
+            Advancement advancement = roundConfig.advancement(key);
+            return advancement != null && advancement.getDisplay() != null
+                    ? advancement.getDisplay().title() : Component.text(key);
+        }
+        ItemType type = roundConfig.itemType(key);
+        return type == null ? Component.text(key) : Component.translatable(type);
     }
 
     /** Registry item types are singletons, so identity compare is enough. */
