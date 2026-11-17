@@ -42,7 +42,7 @@ public final class UpdateChecker implements Listener {
     private volatile Version latestVersion;
     private volatile String downloadUrl = RELEASES_URL;
     private volatile boolean updateAvailable;
-    private volatile boolean checking;
+    private CompletableFuture<CheckResult> inFlight;
 
     public UpdateChecker(BingoRush plugin) {
         this(plugin, Version.parse(plugin.getPluginMeta().getVersion()));
@@ -62,58 +62,65 @@ public final class UpdateChecker implements Listener {
     }
 
     /**
-     * Checks for new releases or tags on GitHub asynchronously.
-     * If feedback is provided, sends progress and result messages to the sender.
+     * Checks GitHub for a newer release, or the highest tag while no stable
+     * release exists, off the main thread. With a sender, they get a reply
+     * either way; a sender who asks while a check is already running gets the
+     * result of that one instead of a second request.
      */
     public CompletableFuture<CheckResult> check(CommandSender feedback) {
-        if (checking) {
-            if (feedback != null) {
-                plugin.messages().send(feedback, "update-checking");
-            }
-            return CompletableFuture.completedFuture(updateAvailable ? CheckResult.UPDATE_FOUND : CheckResult.UP_TO_DATE);
-        }
-
-        checking = true;
         if (feedback != null) {
             plugin.messages().send(feedback, "update-checking");
         }
+        CompletableFuture<CheckResult> running;
+        boolean started = false;
+        synchronized (this) {
+            if (inFlight == null) {
+                inFlight = query();
+                started = true;
+            }
+            running = inFlight;
+        }
+        if (started) {
+            running.whenComplete((result, error) -> {
+                synchronized (this) {
+                    inFlight = null;
+                }
+            });
+            running.thenAccept(result -> onMainThread(() -> {
+                announce(result, feedback);
+                reply(result, feedback);
+            }));
+        } else if (feedback != null) {
+            running.thenAccept(result -> onMainThread(() -> reply(result, feedback)));
+        }
+        return running;
+    }
 
-        HttpRequest releasesRequest = buildRequest(RELEASES_API);
-        return httpClient.sendAsync(releasesRequest, HttpResponse.BodyHandlers.ofString())
+    private CompletableFuture<CheckResult> query() {
+        return httpClient.sendAsync(buildRequest(RELEASES_API), HttpResponse.BodyHandlers.ofString())
                 .thenCompose(response -> {
                     int status = response.statusCode();
                     if (status == 200) {
                         return CompletableFuture.completedFuture(handleReleaseJson(response.body()));
                     }
                     if (status == 404) {
-                        // Fallback to tags if no formal GitHub release exists yet
-                        HttpRequest tagsRequest = buildRequest(TAGS_API);
-                        return httpClient.sendAsync(tagsRequest, HttpResponse.BodyHandlers.ofString())
-                                .thenApply(tagsResponse -> {
-                                    int tagsStatus = tagsResponse.statusCode();
-                                    if (tagsStatus == 200) {
-                                        return handleTagsJson(tagsResponse.body());
-                                    }
-                                    if (tagsStatus == 403) {
-                                        return CheckResult.RATE_LIMITED;
-                                    }
-                                    if (tagsStatus == 404) {
-                                        return CheckResult.NOT_FOUND;
-                                    }
-                                    return CheckResult.ERROR;
+                        // releases/latest skips pre-releases, so while every
+                        // release is one the tags are the only source.
+                        return httpClient.sendAsync(buildRequest(TAGS_API), HttpResponse.BodyHandlers.ofString())
+                                .thenApply(tags -> switch (tags.statusCode()) {
+                                    case 200 -> handleTagsJson(tags.body());
+                                    case 404 -> CheckResult.NOT_FOUND;
+                                    default -> statusResult(tags.statusCode());
                                 });
                     }
-                    if (status == 403) {
-                        return CompletableFuture.completedFuture(CheckResult.RATE_LIMITED);
-                    }
-                    return CompletableFuture.completedFuture(CheckResult.ERROR);
+                    return CompletableFuture.completedFuture(statusResult(status));
                 })
-                .exceptionally(ex -> CheckResult.ERROR)
-                .thenApply(result -> {
-                    checking = false;
-                    handleCheckResult(result, feedback);
-                    return result;
-                });
+                .exceptionally(error -> CheckResult.ERROR);
+    }
+
+    // GitHub answers an exhausted rate limit with 403 or 429, depending on the limit hit.
+    private static CheckResult statusResult(int status) {
+        return status == 403 || status == 429 ? CheckResult.RATE_LIMITED : CheckResult.ERROR;
     }
 
     private HttpRequest buildRequest(String uri) {
@@ -187,57 +194,48 @@ public final class UpdateChecker implements Listener {
         }
     }
 
-    private void handleCheckResult(CheckResult result, CommandSender feedback) {
-        // A check can finish after the plugin is disabled, and the scheduler
-        // refuses tasks from a disabled plugin.
-        if (plugin == null || !plugin.isEnabled()) {
+    // A check can finish after the plugin is disabled, and the scheduler
+    // refuses tasks from a disabled plugin.
+    private void onMainThread(Runnable task) {
+        if (plugin != null && plugin.isEnabled()) {
+            Bukkit.getScheduler().runTask(plugin, task);
+        }
+    }
+
+    /** The console and online admins hear about a new version, unless the notifier is off. */
+    private void announce(CheckResult result, CommandSender asker) {
+        if (result == CheckResult.RATE_LIMITED) {
+            plugin.getLogger().warning("GitHub API rate limit exceeded while checking for updates.");
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            switch (result) {
-                case UPDATE_FOUND -> {
-                    if (plugin.bingoConfig() == null || plugin.bingoConfig().updateNotifierEnabled()) {
-                        plugin.messages().console("A new version is available: <ok>v<latest></ok> (current: <muted>v<current></muted>)",
-                                Placeholder.unparsed("latest", latestVersion.clean()),
-                                Placeholder.unparsed("current", currentVersion.clean()));
-                        plugin.messages().console("Download it at <hl><url></hl>", Placeholder.unparsed("url", downloadUrl));
-
-                        for (Player player : Bukkit.getOnlinePlayers()) {
-                            if (player != feedback
-                                    && (player.hasPermission("bingo.admin") || player.hasPermission("bingo.update"))) {
-                                sendUpdateNotification(player);
-                            }
-                        }
-                    }
-                    // Whoever ran /bingo version gets an answer, even with the notifier off.
-                    if (feedback != null && isSenderReachable(feedback)) {
-                        sendUpdateNotification(feedback);
-                    }
-                }
-                case RATE_LIMITED -> {
-                    plugin.getLogger().warning("GitHub API rate limit exceeded while checking for updates.");
-                    if (feedback != null && isSenderReachable(feedback)) {
-                        plugin.messages().send(feedback, "update-rate-limited");
-                    }
-                }
-                case NOT_FOUND -> {
-                    if (feedback != null && isSenderReachable(feedback)) {
-                        plugin.messages().send(feedback, "update-not-found");
-                    }
-                }
-                case UP_TO_DATE -> {
-                    if (feedback != null && isSenderReachable(feedback)) {
-                        plugin.messages().send(feedback, "update-up-to-date",
-                                Placeholder.unparsed("current", currentVersion.clean()));
-                    }
-                }
-                case ERROR -> {
-                    if (feedback != null && isSenderReachable(feedback)) {
-                        plugin.messages().send(feedback, "update-error");
-                    }
-                }
+        if (result != CheckResult.UPDATE_FOUND
+                || (plugin.bingoConfig() != null && !plugin.bingoConfig().updateNotifierEnabled())) {
+            return;
+        }
+        plugin.messages().console("A new version is available: <ok>v<latest></ok> (current: <muted>v<current></muted>)",
+                Placeholder.unparsed("latest", latestVersion.clean()),
+                Placeholder.unparsed("current", currentVersion.clean()));
+        plugin.messages().console("Download it at <hl><url></hl>", Placeholder.unparsed("url", downloadUrl));
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player != asker && (player.hasPermission("bingo.admin") || player.hasPermission("bingo.update"))) {
+                sendUpdateNotification(player);
             }
-        });
+        }
+    }
+
+    /** Whoever ran /bingo version gets an answer, even with the notifier off. */
+    private void reply(CheckResult result, CommandSender asker) {
+        if (asker == null || !isSenderReachable(asker)) {
+            return;
+        }
+        switch (result) {
+            case UPDATE_FOUND -> sendUpdateNotification(asker);
+            case RATE_LIMITED -> plugin.messages().send(asker, "update-rate-limited");
+            case NOT_FOUND -> plugin.messages().send(asker, "update-not-found");
+            case UP_TO_DATE -> plugin.messages().send(asker, "update-up-to-date",
+                    Placeholder.unparsed("current", currentVersion.clean()));
+            case ERROR -> plugin.messages().send(asker, "update-error");
+        }
     }
 
     private boolean isSenderReachable(CommandSender sender) {
