@@ -148,21 +148,27 @@ public final class SetupMenu {
         for (int slot = 0; slot < top.getSize(); slot++) {
             top.setItem(slot, filler());
         }
-        top.setItem(10, toggleItem(modeIcon(), "setup-mode-name", modeValue(), false, "mode"));
-        top.setItem(12, toggleItem(winIcon(), "setup-win-name", winValue(), false, "win"));
-        top.setItem(14, toggleItem(ItemType.SHIELD, "setup-lockout-name", lockoutValue(), settings.lockout(), "lockout"));
-        top.setItem(16, toggleItem(ItemType.CLOCK, "setup-time-name", timeValue(), false, "time"));
+        top.setItem(10, toggleItem(modeIcon(), "setup-mode-name", modeValue(), modeDescription(), false, "mode"));
+        top.setItem(12, toggleItem(winIcon(), "setup-win-name", winValue(), winDescription(), false, "win"));
+        top.setItem(14, toggleItem(ItemType.SHIELD, "setup-lockout-name", lockoutValue(), "setup-lockout-desc",
+                settings.lockout(), "lockout"));
+        top.setItem(16, toggleItem(ItemType.CLOCK, "setup-time-name", timeValue(), "setup-time-desc", false, "time"));
         top.setItem(22, startItem());
     }
 
-    private ItemStack toggleItem(ItemType icon, String nameKey, Component value, boolean glint, String action) {
+    private ItemStack toggleItem(ItemType icon, String nameKey, Component value, String descriptionKey,
+            boolean glint, String action) {
         ItemStack stack = icon.createItemStack();
         stack.editMeta(meta -> {
             meta.displayName(messages.render(nameKey));
-            meta.lore(List.of(
-                    messages.render("menu-cell-separator"),
-                    messages.render("setup-lore-value", Placeholder.component("value", value)),
-                    messages.render("setup-lore-click")));
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.render("menu-cell-separator"));
+            lore.add(messages.render("setup-lore-value", Placeholder.component("value", value)));
+            lore.add(Component.empty());
+            lore.addAll(messages.renderLore(descriptionKey));
+            lore.add(messages.render("menu-cell-separator"));
+            lore.add(messages.render("setup-lore-click"));
+            meta.lore(lore);
             meta.addItemFlags(ItemFlag.values());
             meta.setEnchantmentGlintOverride(glint);
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
@@ -201,6 +207,17 @@ public final class SetupMenu {
 
     private ItemType winIcon() {
         return settings.winMode() == WinMode.LINE ? ItemType.TARGET : ItemType.GOLDEN_CARROT;
+    }
+
+    private String modeDescription() {
+        return settings.mode() == BingoGameMode.ITEMS ? "setup-mode-desc-items" : "setup-mode-desc-advancements";
+    }
+
+    private String winDescription() {
+        if (settings.winMode() == WinMode.LINE) {
+            return "setup-win-desc-line";
+        }
+        return settings.lockout() ? "setup-win-desc-full-lockout" : "setup-win-desc-full";
     }
 
     private Component modeValue() {

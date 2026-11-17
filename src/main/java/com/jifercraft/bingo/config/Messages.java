@@ -1,11 +1,14 @@
 package com.jifercraft.bingo.config;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -25,6 +28,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  * file and exposed as tags too.
  */
 public final class Messages {
+
+    private static final Pattern LINE_BREAK = Pattern.compile("<br>|<newline>");
 
     private final JavaPlugin plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
@@ -79,6 +84,24 @@ public final class Messages {
         }
         TagResolver resolver = placeholders.length == 0 ? base : TagResolver.resolver(base, TagResolver.resolver(placeholders));
         return miniMessage.deserialize(raw, resolver);
+    }
+
+    /**
+     * One template as item lore. Lore cannot show a line break inside a line,
+     * so the template is cut at each {@code <br>} and every piece becomes its
+     * own line, without the italics the client adds to lore by default.
+     */
+    public List<Component> renderLore(String key, TagResolver... placeholders) {
+        String raw = yaml.getString(key, null);
+        if (raw == null) {
+            return List.of(render(key, placeholders));
+        }
+        TagResolver resolver = placeholders.length == 0 ? base : TagResolver.resolver(base, TagResolver.resolver(placeholders));
+        List<Component> lines = new ArrayList<>();
+        for (String piece : LINE_BREAK.split(raw, -1)) {
+            lines.add(miniMessage.deserialize("<!italic>" + piece, resolver));
+        }
+        return lines;
     }
 
     /**
