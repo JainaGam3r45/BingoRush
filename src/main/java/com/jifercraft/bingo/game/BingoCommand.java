@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand {
 
-    private static final List<String> PLAYER_HELP = List.of("join", "card", "leave", "coords");
+    private static final List<String> PLAYER_HELP = List.of("join", "card", "leave", "coords", "version");
     private static final List<String> ADMIN_HELP = List.of(
             "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams", "reload");
 
@@ -41,6 +41,7 @@ public final class BingoCommand {
                 .executes(this::help)
                 .then(Commands.literal("help").executes(this::help))
                 .then(Commands.literal("ayuda").executes(this::help))
+                .then(Commands.literal("version").executes(this::version))
                 .then(Commands.literal("join")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, player -> game.joinTeam(player, null)))
@@ -158,6 +159,19 @@ public final class BingoCommand {
             for (String key : ADMIN_HELP) {
                 messages.send(sender, "help." + key);
             }
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int version(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        String ver = plugin.updateChecker() != null
+                ? plugin.updateChecker().currentVersion().clean()
+                : plugin.getPluginMeta().getVersion();
+        plugin.messages().send(sender, "version-info",
+                net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.unparsed("current", ver));
+        if (isAdmin(ctx.getSource()) && plugin.updateChecker() != null) {
+            plugin.updateChecker().check(sender);
         }
         return Command.SINGLE_SUCCESS;
     }

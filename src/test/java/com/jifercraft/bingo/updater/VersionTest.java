@@ -12,13 +12,17 @@ class VersionTest {
     void parsesStandardVersions() {
         Version v = Version.parse("1.2.3");
         assertEquals("1.2.3", v.toString());
+        assertEquals("1.2.3", v.clean());
         assertEquals(Version.parse("1.2.3"), v);
     }
 
     @Test
-    void ignoresLeadingV() {
+    void ignoresLeadingVAndPrefixes() {
         assertEquals(Version.parse("1.0.0"), Version.parse("v1.0.0"));
         assertEquals(Version.parse("2.5.1"), Version.parse("V2.5.1"));
+        assertEquals(Version.parse("0.2.0"), Version.parse("BingoRush-0.2.0"));
+        assertEquals("0.2.0", Version.parse("BingoRush-0.2.0").clean());
+        assertEquals("0.2.0", Version.parse("v0.2.0").clean());
     }
 
     @Test

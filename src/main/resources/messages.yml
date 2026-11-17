@@ -31,6 +31,7 @@ help:
   reroll: "<white>/bingo reroll</white> <muted>|</muted> <body>Prepara otra cartilla para la próxima ronda"
   teams: "<white>/bingo teams add|remove|join|clear</white> <muted>|</muted> <body>Gestiona los equipos"
   reload: "<white>/bingo reload</white> <muted>|</muted> <body>Recarga la configuración"
+  version: "<white>/bingo version</white> <muted>|</muted> <body>Muestra la versión y comprueba actualizaciones"
 
 no-permission: "<prefix><err>No tienes permiso para eso."
 players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
@@ -81,6 +82,7 @@ round-cleared-inventories: "<prefix><body>Los inventarios se han vaciado; los re
 round-stopped: "<prefix><body>El administrador ha detenido la ronda."
 round-paused: "<prefix><body>Ronda en pausa. La cartilla no cambia mientras tanto."
 round-resumed: "<prefix><body>La ronda continúa."
+round-restored-admin: "<prefix><body>Se ha restaurado una ronda previa no finalizada. Usa <hl>/bingo resume</hl> para continuarla o <hl>/bingo stop</hl> para descartarla.</body>"
 reroll-done: "<prefix><body>Nueva cartilla preparada con la semilla <hl><seed></hl>."
 reloaded: "<prefix><body>Configuración recargada."
 round-won-title: "<gradient:#FFD23F:#FF8A1F><b>¡<team> gana!</b></gradient>"
@@ -158,5 +160,12 @@ sidebar-footer: "<muted>jifercraft.com</muted>"
 bossbar-title: "<brand> <body>Quedan <hl><time></hl>"
 
 # Updates.
+version-info: "<brand> <body>Versión: <hl>v<current></hl>"
+update-checking: "<prefix><body>Comprobando actualizaciones con GitHub..."
 update-available: "<prefix><body>Hay una nueva versión disponible: <ok>v<latest></ok> <body>(actual: <muted>v<current></muted>). Descárgala en <hl><click:open_url:'<url>'><url></click></hl>"
+update-up-to-date: "<prefix><body>BingoRush está actualizado (<ok>v<current></ok>)."
+update-rate-limited: "<prefix><err>Límite de peticiones de GitHub alcanzado. Prueba más tarde."
+update-not-found: "<prefix><muted>No se encontraron publicaciones en el repositorio todavía.</muted>"
+update-error: "<prefix><err>No se pudo conectar con GitHub para comprobar actualizaciones."
+
 

@@ -196,4 +196,7 @@ sounds:
 update-notifier:
   enabled: true
   on-join: true
+  # Hours between automatic background checks while the server runs. 0 disables the timer.
+  check-interval-hours: 24
+
 

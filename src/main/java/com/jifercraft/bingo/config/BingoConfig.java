@@ -63,12 +63,14 @@ public final class BingoConfig {
     private final List<TeamDefinition> teamDefinitions;
     private final boolean updateNotifierEnabled;
     private final boolean updateNotifierOnJoin;
+    private final int updateCheckIntervalHours;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
             Map<String, Advancement> advancementsByKey, Map<SoundId, Key> sounds,
-            List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin) {
+            List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin,
+            int updateCheckIntervalHours) {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
@@ -87,6 +89,7 @@ public final class BingoConfig {
         this.teamDefinitions = teamDefinitions;
         this.updateNotifierEnabled = updateNotifierEnabled;
         this.updateNotifierOnJoin = updateNotifierOnJoin;
+        this.updateCheckIntervalHours = updateCheckIntervalHours;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -293,13 +296,14 @@ public final class BingoConfig {
 
         boolean updateNotifierEnabled = yaml.getBoolean("update-notifier.enabled", true);
         boolean updateNotifierOnJoin = yaml.getBoolean("update-notifier.on-join", true);
+        int updateCheckIntervalHours = yaml.getInt("update-notifier.check-interval-hours", 24);
 
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
         return new BingoConfig(gameMode, winMode, lockout, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
-                teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin);
+                teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours);
     }
 
     public BingoGameMode gameMode() {
@@ -384,5 +388,9 @@ public final class BingoConfig {
 
     public boolean updateNotifierOnJoin() {
         return updateNotifierOnJoin;
+    }
+
+    public int updateCheckIntervalHours() {
+        return updateCheckIntervalHours;
     }
 }

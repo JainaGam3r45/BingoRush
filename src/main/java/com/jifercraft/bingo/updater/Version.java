@@ -5,7 +5,7 @@ import java.util.Objects;
 
 /**
  * Basic semantic version (major.minor.patch) with optional pre-release tag.
- * Strips leading 'v' and ignores build metadata (+build).
+ * Strips leading 'v', project prefixes, and ignores build metadata (+build).
  */
 public final class Version implements Comparable<Version> {
 
@@ -23,21 +23,33 @@ public final class Version implements Comparable<Version> {
         if (raw == null || raw.isBlank()) {
             return new Version(new int[]{0}, "", "0");
         }
-        String clean = raw.trim();
-        String original = clean;
-        if (clean.startsWith("v") || clean.startsWith("V")) {
-            clean = clean.substring(1);
+        String original = raw.trim();
+        String clean = original;
+
+        // Skip non-digit prefixes such as "v", "V", or "BingoRush-"
+        int firstDigit = -1;
+        for (int i = 0; i < clean.length(); i++) {
+            if (Character.isDigit(clean.charAt(i))) {
+                firstDigit = i;
+                break;
+            }
         }
+        if (firstDigit != -1) {
+            clean = clean.substring(firstDigit);
+        }
+
         int plus = clean.indexOf('+');
         if (plus != -1) {
             clean = clean.substring(0, plus);
         }
+
         String pre = "";
         int dash = clean.indexOf('-');
         if (dash != -1) {
             pre = clean.substring(dash + 1);
             clean = clean.substring(0, dash);
         }
+
         String[] tokens = clean.split("\\.");
         int[] numbers = new int[tokens.length];
         for (int i = 0; i < tokens.length; i++) {
@@ -52,6 +64,19 @@ public final class Version implements Comparable<Version> {
 
     public boolean isNewerThan(Version other) {
         return compareTo(other) > 0;
+    }
+
+    /** Returns normalized version without leading 'v' or project prefix. */
+    public String clean() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < numbers.length; i++) {
+            if (i > 0) sb.append('.');
+            sb.append(numbers[i]);
+        }
+        if (!preRelease.isEmpty()) {
+            sb.append('-').append(preRelease);
+        }
+        return sb.toString();
     }
 
     @Override

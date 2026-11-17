@@ -35,6 +35,7 @@ public final class BingoRush extends JavaPlugin {
             teams.reset(bingoConfig.teamDefinitions());
         }
         game = new Game(this, teams);
+        game.loadSavedRoundIfPresent();
         getServer().getPluginManager().registerEvents(new RoundListener(game), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             BingoCommand bingoCmd = new BingoCommand(this, game);
@@ -46,6 +47,7 @@ public final class BingoRush extends JavaPlugin {
         getServer().getPluginManager().registerEvents(updateChecker, this);
         if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {
             updateChecker.check();
+            updateChecker.startPeriodicCheck();
         }
 
         getLogger().info("BingoRush enabled");
@@ -53,6 +55,9 @@ public final class BingoRush extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (updateChecker != null) {
+            updateChecker.stopPeriodicCheck();
+        }
         if (game != null) {
             game.shutdown();
         }
@@ -82,8 +87,13 @@ public final class BingoRush extends JavaPlugin {
         reloadConfig();
         messages.reload();
         loadConfigOrLog();
-        if (updateChecker != null && (bingoConfig == null || bingoConfig.updateNotifierEnabled())) {
-            updateChecker.check();
+        if (updateChecker != null) {
+            if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {
+                updateChecker.check();
+                updateChecker.startPeriodicCheck();
+            } else {
+                updateChecker.stopPeriodicCheck();
+            }
         }
     }
 
