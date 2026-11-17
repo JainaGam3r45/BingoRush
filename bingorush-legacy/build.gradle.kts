@@ -71,6 +71,8 @@ tasks.jar {
 }
 
 tasks.shadowJar {
+    // BingoRush's own license travels with every jar.
+    from(rootProject.file("LICENSE"))
     archiveBaseName = "BingoRush-Legacy"
     archiveClassifier = ""
     from(v1_12.output)

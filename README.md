@@ -70,6 +70,10 @@ Files live in `plugins/BingoRush/`. New keys are added to existing files on star
 - `config.yml`: game mode, win mode, lockout, lives, time limit, teams, item and advancement pools, sounds, round chat, the advancements tab, update checks and history.
 - `lang/messages_<code>.yml`: everything players read, in MiniMessage, with the color palette at the top. English (`en`, the default) and Spanish (`es`) ship with the plugin; pick one with `language` in `config.yml`, or copy `messages_en.yml` to add your own. Missing keys fall back to English.
 
+## Third-party notices
+
+The Legacy jar bundles Adventure, Adventure Platform, Examination and Option (by KyoriPowered) and XSeries (by Crypto Morin), all under the MIT License and moved to the package `com.jifercraft.bingo.lib`. Their license texts are inside the jar under `META-INF/licenses/`, listed in `META-INF/THIRD-PARTY-NOTICES.txt`. The Modern jar bundles nothing from outside.
+
 ## License and credits
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for details.

@@ -55,6 +55,8 @@ tasks.jar {
 }
 
 tasks.shadowJar {
+    // BingoRush's own license travels with every jar.
+    from(rootProject.file("LICENSE"))
     archiveBaseName = "BingoRush-Modern"
     archiveClassifier = ""
     // Paper already provides Gson; only the core classes and files go in.
