@@ -244,6 +244,7 @@ public final class BingoConfig {
         }
         if (advTiers != null) {
             List<ItemTier> parsedAdvTiers = new ArrayList<>();
+            List<String> missingAdvancements = new ArrayList<>();
             for (String id : advTiers.getKeys(false)) {
                 ConfigurationSection tier = advTiers.getConfigurationSection(id);
                 if (tier == null) {
@@ -271,13 +272,18 @@ public final class BingoConfig {
                         problems.add("advancement-pool.tiers." + id + " lists a recipe unlock, only real advancements are allowed: '" + raw + "'");
                         continue;
                     }
+                    // Like items, advancements newer than the server are left
+                    // out, so one config works across versions.
                     if (advancementExists != null && !advancementExists.test(key)) {
-                        problems.add("advancement-pool.tiers." + id + " has an advancement that does not exist: '" + raw + "'");
+                        missingAdvancements.add(key);
                         continue;
                     }
                     valid.add(key);
                 }
                 parsedAdvTiers.add(new ItemTier(id, cells, valid));
+            }
+            if (!missingAdvancements.isEmpty()) {
+                notes.add("Skipping advancements this server version does not have: " + String.join(", ", missingAdvancements));
             }
             try {
                 advancementPool = new ItemPool(parsedAdvTiers);
