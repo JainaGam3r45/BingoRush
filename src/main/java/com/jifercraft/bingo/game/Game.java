@@ -59,6 +59,7 @@ public final class Game {
     private final Hud hud;
     private final File activeRoundFile;
     private final QueuedFileWriter roundWriter;
+    private final PendingRestores pendingRestores;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
@@ -83,6 +84,8 @@ public final class Game {
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
         this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
+        this.pendingRestores = new PendingRestores(new File(plugin.getDataFolder(), "data/pending-restores.json"),
+                plugin.getLogger());
     }
 
     public Round round() {
@@ -592,9 +595,11 @@ public final class Game {
                 giveCardItem(player);
             } else {
                 restoreInventory(player);
+                pendingRestores.applyTo(player);
             }
         } else {
             restoreInventory(player);
+            pendingRestores.applyTo(player);
         }
     }
 
@@ -677,6 +682,8 @@ public final class Game {
             restoreInventories();
         }
         removeCardItemsFromAll();
+        // Last, so whatever restoreInventories queued above reaches the disk.
+        pendingRestores.close();
         round = null;
         roundConfig = null;
     }
@@ -1136,11 +1143,15 @@ public final class Game {
         }
     }
 
+    // Players who are offline right now used to lose their saved inventory
+    // here; they get it on their next login instead.
     private void restoreInventories() {
         for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player != null) {
                 player.getInventory().setContents(entry.getValue());
+            } else {
+                pendingRestores.addInventory(entry.getKey(), entry.getValue());
             }
         }
         savedInventories.clear();
