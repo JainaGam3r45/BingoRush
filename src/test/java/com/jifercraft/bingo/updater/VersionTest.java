@@ -68,4 +68,11 @@ class VersionTest {
     void ignoresBuildMetadata() {
         assertEquals(0, Version.parse("1.0.0+build12").compareTo(Version.parse("1.0.0+build99")));
     }
+
+    @Test
+    void equalVersionsShareAHash() {
+        assertEquals(Version.parse("1.0"), Version.parse("1.0.0"));
+        assertEquals(Version.parse("1.0").hashCode(), Version.parse("1.0.0").hashCode());
+        assertEquals(Version.parse("2.0.0-RC.1").hashCode(), Version.parse("2.0.0-rc.1").hashCode());
+    }
 }

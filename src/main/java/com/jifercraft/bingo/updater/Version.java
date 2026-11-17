@@ -2,7 +2,6 @@ package com.jifercraft.bingo.updater;
 
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.Objects;
 
 /**
  * Basic semantic version (major.minor.patch) with optional pre-release tag.
@@ -138,10 +137,14 @@ public final class Version implements Comparable<Version> {
         return compareTo(other) == 0;
     }
 
+    // equals goes through compareTo, where 1.0 equals 1.0.0 and "RC" equals
+    // "rc", so only the numbers without trailing zeros feed the hash.
     @Override
     public int hashCode() {
-        int result = Arrays.hashCode(numbers);
-        result = 31 * result + Objects.hashCode(preRelease);
-        return result;
+        int length = numbers.length;
+        while (length > 1 && numbers[length - 1] == 0) {
+            length--;
+        }
+        return Arrays.hashCode(Arrays.copyOf(numbers, length));
     }
 }
