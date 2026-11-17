@@ -67,10 +67,20 @@ public final class BingoCommand {
                                         game.openCardSpectator(player, StringArgumentType.getString(ctx, "team"))))))
                 .then(Commands.literal("start")
                         .requires(this::isAdmin)
-                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null)))
+                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null, null)))
+                        .then(Commands.literal("items")
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ITEMS, null)))
+                                .then(Commands.argument("seed", StringArgumentType.greedyString())
+                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
+                                                BingoGameMode.ITEMS, StringArgumentType.getString(ctx, "seed"))))))
+                        .then(Commands.literal("advancements")
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ADVANCEMENTS, null)))
+                                .then(Commands.argument("seed", StringArgumentType.greedyString())
+                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
+                                                BingoGameMode.ADVANCEMENTS, StringArgumentType.getString(ctx, "seed"))))))
                         .then(Commands.argument("seed", StringArgumentType.greedyString())
                                 .executes(ctx -> run(ctx, sender -> game.startRound(sender,
-                                        StringArgumentType.getString(ctx, "seed"))))))
+                                        null, StringArgumentType.getString(ctx, "seed"))))))
                 .then(Commands.literal("stop").requires(this::isAdmin)
                         .executes(ctx -> run(ctx, game::stopRound)))
                 .then(Commands.literal("pause").requires(this::isAdmin)

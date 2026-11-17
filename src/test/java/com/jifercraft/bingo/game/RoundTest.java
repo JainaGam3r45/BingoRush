@@ -33,4 +33,17 @@ class RoundTest {
         assertEquals(1, round.firstClaim().teamId());
         assertEquals(15000L, round.firstClaim().elapsedMs());
     }
+
+    @Test
+    void storesGameMode() {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "test:item" + i).toList();
+        BingoCard card = new BingoCard(1L, items);
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD);
+
+        Round defaultRound = new Round(1L, card, board);
+        assertEquals(BingoGameMode.ITEMS, defaultRound.mode());
+
+        Round advRound = new Round(2L, BingoGameMode.ADVANCEMENTS, card, board);
+        assertEquals(BingoGameMode.ADVANCEMENTS, advRound.mode());
+    }
 }

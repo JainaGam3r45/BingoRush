@@ -9,6 +9,7 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -62,6 +63,11 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onBucketFill(PlayerBucketFillEvent event) {
         game.checkClaims(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onAdvancementDone(PlayerAdvancementDoneEvent event) {
+        game.checkAdvancementClaim(event.getPlayer(), event.getAdvancement());
     }
 
     /** Right click with the card item opens the card, nothing else happens. */

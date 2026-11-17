@@ -81,10 +81,13 @@ public final class Hud {
                 bossBar.addViewer(player);
             }
         }
+        String subtitleKey = game.round() != null && game.round().mode() == BingoGameMode.ADVANCEMENTS
+                ? "round-started-subtitle-advancements"
+                : "round-started-subtitle";
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.showTitle(Title.title(
                     plugin.messages().render("round-started-title"),
-                    plugin.messages().render("round-started-subtitle"),
+                    plugin.messages().render(subtitleKey),
                     Title.Times.times(TITLE_FADE, TITLE_STAY, TITLE_FADE)));
         }
         play(BingoConfig.SoundId.START, Bukkit.getOnlinePlayers());
