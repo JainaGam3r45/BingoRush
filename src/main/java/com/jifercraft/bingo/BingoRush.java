@@ -12,6 +12,8 @@ import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BingoRush extends JavaPlugin {
@@ -57,7 +59,11 @@ public final class BingoRush extends JavaPlugin {
             updateChecker.startPeriodicCheck();
         }
 
-        getLogger().info("BingoRush enabled");
+        messages.console("Enabled <hl>v<version></hl> <muted>(<mode>, <teams> teams)</muted>",
+                Placeholder.unparsed("version", getPluginMeta().getVersion()),
+                Placeholder.unparsed("mode", bingoConfig == null ? "config broken"
+                        : bingoConfig.gameMode().name().toLowerCase(Locale.ROOT)),
+                Placeholder.unparsed("teams", String.valueOf(teams.all().size())));
     }
 
     @Override
@@ -68,7 +74,9 @@ public final class BingoRush extends JavaPlugin {
         if (game != null) {
             game.shutdown();
         }
-        getLogger().info("BingoRush disabled");
+        if (messages != null) {
+            messages.console("Disabled");
+        }
     }
 
     public Messages messages() {

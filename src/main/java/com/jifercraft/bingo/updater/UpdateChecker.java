@@ -197,9 +197,10 @@ public final class UpdateChecker implements Listener {
             switch (result) {
                 case UPDATE_FOUND -> {
                     if (plugin.bingoConfig() == null || plugin.bingoConfig().updateNotifierEnabled()) {
-                        plugin.getLogger().info("A new version is available: v" + latestVersion.clean()
-                                + " (current: v" + currentVersion.clean() + ")");
-                        plugin.getLogger().info("Download it at: " + downloadUrl);
+                        plugin.messages().console("A new version is available: <ok>v<latest></ok> (current: <muted>v<current></muted>)",
+                                Placeholder.unparsed("latest", latestVersion.clean()),
+                                Placeholder.unparsed("current", currentVersion.clean()));
+                        plugin.messages().console("Download it at <hl><url></hl>", Placeholder.unparsed("url", downloadUrl));
 
                         for (Player player : Bukkit.getOnlinePlayers()) {
                             if (player != feedback

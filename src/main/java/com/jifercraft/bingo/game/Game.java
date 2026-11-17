@@ -213,8 +213,10 @@ public final class Game {
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
-            plugin.getLogger().info("Countdown of " + total + "s started, seed " + seed
-                    + (lockout ? " [lockout]" : ""));
+            messages().console("Countdown of <hl><seconds>s</hl> started, seed <hl><seed></hl><lockout>",
+                    Placeholder.unparsed("seconds", String.valueOf(total)),
+                    Placeholder.unparsed("seed", String.valueOf(seed)),
+                    Placeholder.unparsed("lockout", lockout ? " [lockout]" : ""));
             secondsLeft = total;
             hud.countdownTick(secondsLeft);
             countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCountdown, 20, 20);
@@ -228,7 +230,9 @@ public final class Game {
             messages().send(caller, "round-not-running");
             return;
         }
-        plugin.getLogger().info("Round stopped by " + caller.getName() + ", seed " + round.seed());
+        messages().console("Round stopped by <hl><player></hl>, seed <hl><seed></hl>",
+                Placeholder.unparsed("player", caller.getName()),
+                Placeholder.unparsed("seed", String.valueOf(round.seed())));
         broadcast("round-stopped");
         endRound();
     }
@@ -283,7 +287,8 @@ public final class Game {
         }
         pendingSeed = new Random().nextLong();
         messages().send(caller, "reroll-done", Placeholder.unparsed("seed", Long.toString(pendingSeed)));
-        plugin.getLogger().info("Next card rerolled, seed " + pendingSeed);
+        messages().console("Next card rerolled, seed <hl><seed></hl>",
+                Placeholder.unparsed("seed", String.valueOf(pendingSeed)));
     }
 
     public void joinTeam(Player player, String teamName) {
@@ -736,8 +741,9 @@ public final class Game {
             scatterTeams();
         }
         broadcast("round-started-chat");
-        plugin.getLogger().info("Round started (" + round.mode().name().toLowerCase(Locale.ROOT)
-                + "), seed " + round.seed());
+        messages().console("Round started (<hl><mode></hl>), seed <hl><seed></hl>",
+                Placeholder.unparsed("mode", round.mode().name().toLowerCase(Locale.ROOT)),
+                Placeholder.unparsed("seed", String.valueOf(round.seed())));
         hud.roundStarted(roundTimeLimit);
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
         // The events catch most claims, but /give and friends fire nothing,
@@ -772,12 +778,14 @@ public final class Game {
         Team winner = teams.byId(current.board().leader().orElse(-1));
         if (winner == null) {
             broadcast("round-no-claims");
-            plugin.getLogger().info("Round timed out with no claims, seed " + current.seed());
+            messages().console("Round timed out with no claims, seed <hl><seed></hl>",
+                    Placeholder.unparsed("seed", String.valueOf(current.seed())));
         } else {
             broadcast("round-time-up-chat",
                     teamPlaceholder(winner),
                     Placeholder.unparsed("count", String.valueOf(current.board().count(winner.id()))));
-            plugin.getLogger().info("Round timed out, winner: " + winner.name() + ", seed " + current.seed());
+            messages().console("Round timed out, winner: <team><body>, seed <hl><seed></hl>",
+                    teamPlaceholder(winner), Placeholder.unparsed("seed", String.valueOf(current.seed())));
         }
         broadcastBreakdown(current);
         recordMatchResult(current, winner, "TIMEOUT");
@@ -847,8 +855,9 @@ public final class Game {
 
             hud.restorePaused(restored.timeLimitSeconds());
 
-            plugin.getLogger().info("Found an unfinished round from previous session (seed "
-                    + round.seed() + "). Restored in PAUSED state.");
+            messages().console("Found an unfinished round from the last session (seed <hl><seed></hl>),"
+                    + " restored paused. Run <hl>/bingo resume</hl> when players are back.",
+                    Placeholder.unparsed("seed", String.valueOf(round.seed())));
 
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (player.hasPermission("bingo.admin")) {
@@ -918,8 +927,10 @@ public final class Game {
                 member.sendActionBar(bar);
             }
         }
-        plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
-                + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        messages().console("<team><body> claimed <hl><item></hl> (cell <cell>), <hl><count></hl> cells, by <player>",
+                teamPlaceholder(team), Placeholder.unparsed("item", itemKey),
+                Placeholder.unparsed("cell", String.valueOf(cell)), Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("player", claimer.getName()));
         if (current.board().isLockout()) {
             hud.lockoutLost(team);
             Component rivalBar = messages().render("lockout-cell-lost-actionbar", item, teamPlaceholder(team));
@@ -1007,8 +1018,10 @@ public final class Game {
             }
         }
 
-        plugin.getLogger().info("Team " + team.name() + " claimed advancement " + advancement.getKey()
-                + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        messages().console("<team><body> claimed advancement <hl><item></hl> (cell <cell>), <hl><count></hl> cells, by <player>",
+                teamPlaceholder(team), Placeholder.unparsed("item", advancement.getKey().toString()),
+                Placeholder.unparsed("cell", String.valueOf(cell)), Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("player", claimer.getName()));
         if (current.board().isLockout()) {
             hud.lockoutLost(team);
             Component rivalBar = messages().render("lockout-advancement-lost-actionbar", adv, item, teamPlaceholder(team));
@@ -1036,7 +1049,9 @@ public final class Game {
     private void winByCompletion(Round current, Team winner) {
         String time = clock(current.elapsedMs());
         broadcast("round-won-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
-        plugin.getLogger().info("Round won by " + winner.name() + " in " + time + ", seed " + current.seed());
+        messages().console("Round won by <team><body> in <hl><time></hl>, seed <hl><seed></hl>",
+                teamPlaceholder(winner), Placeholder.unparsed("time", time),
+                Placeholder.unparsed("seed", String.valueOf(current.seed())));
         broadcastBreakdown(current);
         recordMatchResult(current, winner, "COMPLETION");
         hud.won(winner);

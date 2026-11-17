@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,10 +14,10 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -105,16 +104,24 @@ public final class Messages {
     }
 
     /**
-     * Sends one template. Players get the rendered component; the console gets
-     * the same line as plain text, without colors.
+     * Sends one template. The console gets the colored component too: Paper
+     * turns it into ANSI codes for the terminal and strips them from the log
+     * file.
      */
     public void send(CommandSender to, String key, TagResolver... placeholders) {
-        Component rendered = render(key, placeholders);
-        if (to instanceof Player) {
-            to.sendMessage(rendered);
-        } else {
-            to.sendMessage(PlainTextComponentSerializer.plainText().serialize(rendered));
-        }
+        to.sendMessage(render(key, placeholders));
+    }
+
+    /**
+     * An informational console line with the plugin prefix, for round events
+     * and startup. The text is for admins reading the console, so it stays in
+     * Java and in English; values go in as placeholders, never concatenated,
+     * so a team name cannot inject tags. Warnings and errors keep using the
+     * logger, which tags them with their level.
+     */
+    public void console(String template, TagResolver... placeholders) {
+        TagResolver resolver = placeholders.length == 0 ? base : TagResolver.resolver(base, TagResolver.resolver(placeholders));
+        Bukkit.getConsoleSender().sendMessage(miniMessage.deserialize("<prefix><body>" + template, resolver));
     }
 
     /**
