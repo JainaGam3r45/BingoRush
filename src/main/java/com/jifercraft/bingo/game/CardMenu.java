@@ -13,9 +13,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.advancement.Advancement;
@@ -157,10 +160,21 @@ public final class CardMenu {
     private ItemStack itemCellItem(Round round, Team viewer, int cell) {
         String itemKey = round.card().item(cell);
         ItemType type = plugin.bingoConfig().itemType(itemKey);
-        ItemStack stack = (type == null ? ItemType.BARRIER : type).createItemStack();
         ClaimBoard board = round.board();
+        boolean lockout = board.isLockout();
+        OptionalInt owner = board.owner(cell);
+        boolean own = owner.isPresent() && owner.getAsInt() == viewer.id();
+        boolean rival = lockout && owner.isPresent() && owner.getAsInt() != viewer.id();
+
+        ItemStack stack;
+        if (rival) {
+            Team rivalTeam = teams.byId(owner.getAsInt());
+            stack = stainedGlassPaneFor(rivalTeam != null ? rivalTeam.color() : null).createItemStack();
+        } else {
+            stack = (type == null ? ItemType.BARRIER : type).createItemStack();
+        }
+
         String tierId = plugin.bingoConfig().pool().tierOf(itemKey);
-        boolean own = board.claimers(cell).contains(viewer.id());
         stack.editMeta(meta -> {
             Component translatable = Component.translatable(type == null ? itemKey : type.translationKey());
             meta.displayName(messages.render("menu-cell-name", Placeholder.component("item", translatable)));
@@ -173,26 +187,49 @@ public final class CardMenu {
             }
             lore.add(messages.render("menu-cell-separator"));
 
-            List<Integer> claimers = board.claimers(cell);
-            if (claimers.isEmpty()) {
-                lore.add(messages.render("menu-status-available"));
-                lore.add(messages.render("menu-status-available-hint"));
-            } else {
-                if (own) {
-                    lore.add(messages.render("menu-status-own"));
-                    lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
+            if (lockout) {
+                if (owner.isEmpty()) {
+                    lore.add(messages.render("menu-status-available"));
+                    lore.add(messages.render("menu-status-available-hint"));
+                } else if (own) {
+                    lore.add(messages.render("menu-status-lockout-own"));
                     long claimedAt = board.claimTime(cell, viewer.id());
                     lore.add(messages.render("menu-status-own-time",
                             Placeholder.unparsed("time", CLOCK.format(
                                     Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
+                } else {
+                    Team rivalTeam = teams.byId(owner.getAsInt());
+                    TagResolver rivalTag = rivalTeam != null ? Game.teamPlaceholder(rivalTeam) : Placeholder.unparsed("team", "?");
+                    long claimedAt = board.claimTime(cell, owner.getAsInt());
+                    lore.add(messages.render("menu-status-lockout-locked"));
+                    lore.add(messages.render("menu-status-lockout-claimed-by", rivalTag));
+                    lore.add(messages.render("menu-status-lockout-time",
+                            Placeholder.unparsed("time", CLOCK.format(
+                                    Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
+                    lore.add(messages.render("menu-status-lockout-hint"));
                 }
-                for (int teamId : claimers) {
-                    if (teamId == viewer.id()) {
-                        continue;
+            } else {
+                List<Integer> claimers = board.claimers(cell);
+                if (claimers.isEmpty()) {
+                    lore.add(messages.render("menu-status-available"));
+                    lore.add(messages.render("menu-status-available-hint"));
+                } else {
+                    if (own) {
+                        lore.add(messages.render("menu-status-own"));
+                        lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
+                        long claimedAt = board.claimTime(cell, viewer.id());
+                        lore.add(messages.render("menu-status-own-time",
+                                Placeholder.unparsed("time", CLOCK.format(
+                                        Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
                     }
-                    Team claimer = teams.byId(teamId);
-                    if (claimer != null) {
-                        lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                    for (int teamId : claimers) {
+                        if (teamId == viewer.id()) {
+                            continue;
+                        }
+                        Team claimer = teams.byId(teamId);
+                        if (claimer != null) {
+                            lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                        }
                     }
                 }
             }
@@ -200,8 +237,6 @@ public final class CardMenu {
             meta.lore(lore);
 
             meta.addItemFlags(ItemFlag.values());
-            // The viewer's own claims glow; rival claims stay dull, so the
-            // state reads at a glance before the lore.
             meta.setEnchantmentGlintOverride(own ? Boolean.TRUE : Boolean.FALSE);
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
         });
@@ -212,15 +247,23 @@ public final class CardMenu {
         String key = round.card().item(cell);
         Advancement adv = plugin.bingoConfig().advancement(key);
         AdvancementDisplay display = adv != null ? adv.getDisplay() : null;
+        ClaimBoard board = round.board();
+        boolean lockout = board.isLockout();
+        OptionalInt owner = board.owner(cell);
+        boolean own = owner.isPresent() && owner.getAsInt() == viewer.id();
+        boolean rival = lockout && owner.isPresent() && owner.getAsInt() != viewer.id();
+
         ItemStack stack;
-        if (display != null && display.icon() != null) {
+        if (rival) {
+            Team rivalTeam = teams.byId(owner.getAsInt());
+            stack = stainedGlassPaneFor(rivalTeam != null ? rivalTeam.color() : null).createItemStack();
+        } else if (display != null && display.icon() != null) {
             stack = display.icon().clone();
         } else {
             stack = ItemType.KNOWLEDGE_BOOK.createItemStack();
         }
-        ClaimBoard board = round.board();
+
         String tierId = plugin.bingoConfig().advancementPool().tierOf(key);
-        boolean own = board.claimers(cell).contains(viewer.id());
         stack.editMeta(meta -> {
             Component advTitle = display != null ? display.title() : Component.text(key);
             meta.displayName(messages.render("menu-cell-name",
@@ -242,26 +285,49 @@ public final class CardMenu {
                 lore.add(messages.render("menu-cell-separator"));
             }
 
-            List<Integer> claimers = board.claimers(cell);
-            if (claimers.isEmpty()) {
-                lore.add(messages.render("menu-status-available"));
-                lore.add(messages.render("menu-status-available-hint-advancement"));
-            } else {
-                if (own) {
-                    lore.add(messages.render("menu-status-own"));
-                    lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
+            if (lockout) {
+                if (owner.isEmpty()) {
+                    lore.add(messages.render("menu-status-available"));
+                    lore.add(messages.render("menu-status-available-hint-advancement"));
+                } else if (own) {
+                    lore.add(messages.render("menu-status-lockout-own"));
                     long claimedAt = board.claimTime(cell, viewer.id());
                     lore.add(messages.render("menu-status-own-time",
                             Placeholder.unparsed("time", CLOCK.format(
                                     Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
+                } else {
+                    Team rivalTeam = teams.byId(owner.getAsInt());
+                    TagResolver rivalTag = rivalTeam != null ? Game.teamPlaceholder(rivalTeam) : Placeholder.unparsed("team", "?");
+                    long claimedAt = board.claimTime(cell, owner.getAsInt());
+                    lore.add(messages.render("menu-status-lockout-locked"));
+                    lore.add(messages.render("menu-status-lockout-claimed-by", rivalTag));
+                    lore.add(messages.render("menu-status-lockout-time",
+                            Placeholder.unparsed("time", CLOCK.format(
+                                    Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
+                    lore.add(messages.render("menu-status-lockout-hint"));
                 }
-                for (int teamId : claimers) {
-                    if (teamId == viewer.id()) {
-                        continue;
+            } else {
+                List<Integer> claimers = board.claimers(cell);
+                if (claimers.isEmpty()) {
+                    lore.add(messages.render("menu-status-available"));
+                    lore.add(messages.render("menu-status-available-hint-advancement"));
+                } else {
+                    if (own) {
+                        lore.add(messages.render("menu-status-own"));
+                        lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
+                        long claimedAt = board.claimTime(cell, viewer.id());
+                        lore.add(messages.render("menu-status-own-time",
+                                Placeholder.unparsed("time", CLOCK.format(
+                                        Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
                     }
-                    Team claimer = teams.byId(teamId);
-                    if (claimer != null) {
-                        lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                    for (int teamId : claimers) {
+                        if (teamId == viewer.id()) {
+                            continue;
+                        }
+                        Team claimer = teams.byId(teamId);
+                        if (claimer != null) {
+                            lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                        }
                     }
                 }
             }
@@ -273,5 +339,48 @@ public final class CardMenu {
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
         });
         return stack;
+    }
+
+    private static ItemType stainedGlassPaneFor(TextColor color) {
+        if (color == null) {
+            return ItemType.RED_STAINED_GLASS_PANE;
+        }
+        int r = color.red();
+        int g = color.green();
+        int b = color.blue();
+
+        record ColorPane(ItemType pane, int r, int g, int b) {}
+        ColorPane[] panes = {
+            new ColorPane(ItemType.WHITE_STAINED_GLASS_PANE, 249, 255, 254),
+            new ColorPane(ItemType.ORANGE_STAINED_GLASS_PANE, 249, 128, 29),
+            new ColorPane(ItemType.MAGENTA_STAINED_GLASS_PANE, 199, 78, 189),
+            new ColorPane(ItemType.LIGHT_BLUE_STAINED_GLASS_PANE, 58, 179, 218),
+            new ColorPane(ItemType.YELLOW_STAINED_GLASS_PANE, 254, 216, 61),
+            new ColorPane(ItemType.LIME_STAINED_GLASS_PANE, 128, 199, 31),
+            new ColorPane(ItemType.PINK_STAINED_GLASS_PANE, 243, 140, 170),
+            new ColorPane(ItemType.GRAY_STAINED_GLASS_PANE, 71, 79, 82),
+            new ColorPane(ItemType.LIGHT_GRAY_STAINED_GLASS_PANE, 156, 157, 151),
+            new ColorPane(ItemType.CYAN_STAINED_GLASS_PANE, 22, 156, 156),
+            new ColorPane(ItemType.PURPLE_STAINED_GLASS_PANE, 137, 50, 184),
+            new ColorPane(ItemType.BLUE_STAINED_GLASS_PANE, 60, 68, 170),
+            new ColorPane(ItemType.BROWN_STAINED_GLASS_PANE, 131, 84, 50),
+            new ColorPane(ItemType.GREEN_STAINED_GLASS_PANE, 94, 124, 22),
+            new ColorPane(ItemType.RED_STAINED_GLASS_PANE, 176, 46, 38),
+            new ColorPane(ItemType.BLACK_STAINED_GLASS_PANE, 29, 29, 33)
+        };
+
+        ItemType best = ItemType.RED_STAINED_GLASS_PANE;
+        long bestDist = Long.MAX_VALUE;
+        for (ColorPane cp : panes) {
+            long dr = r - cp.r;
+            long dg = g - cp.g;
+            long db = b - cp.b;
+            long dist = dr * dr + dg * dg + db * db;
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = cp.pane;
+            }
+        }
+        return best;
     }
 }
