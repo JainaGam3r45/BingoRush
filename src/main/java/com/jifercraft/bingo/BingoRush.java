@@ -11,6 +11,7 @@ import com.jifercraft.bingo.history.MatchHistory;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
+import java.util.List;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BingoRush extends JavaPlugin {
@@ -43,7 +44,7 @@ public final class BingoRush extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new RoundListener(game), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             BingoCommand bingoCmd = new BingoCommand(this, game);
-            event.registrar().register(bingoCmd.build(), "Bingo minigame", java.util.List.of("b"));
+            event.registrar().register(bingoCmd.build(), "Bingo minigame", List.of("b"));
             event.registrar().register(bingoCmd.buildCardAlias("card"));
             event.registrar().register(bingoCmd.buildTeamAlias("teams"));
             event.registrar().register(bingoCmd.buildSetupAlias("setup"));

@@ -13,8 +13,11 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -217,20 +220,20 @@ public final class BingoCommand {
                 ? plugin.updateChecker().currentVersion().clean()
                 : plugin.getPluginMeta().getVersion();
         plugin.messages().send(sender, "version-info",
-                net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.unparsed("current", ver));
+                Placeholder.unparsed("current", ver));
         if (isAdmin(ctx.getSource()) && plugin.updateChecker() != null) {
             plugin.updateChecker().check(sender);
         }
         return Command.SINGLE_SUCCESS;
     }
 
-    private int run(CommandContext<CommandSourceStack> ctx, java.util.function.Consumer<CommandSender> action) {
+    private int run(CommandContext<CommandSourceStack> ctx, Consumer<CommandSender> action) {
         action.accept(ctx.getSource().getSender());
         return Command.SINGLE_SUCCESS;
     }
 
     /** Commands that only work for a player, with a clear line for the console. */
-    private int runForPlayer(CommandContext<CommandSourceStack> ctx, java.util.function.Consumer<Player> action) {
+    private int runForPlayer(CommandContext<CommandSourceStack> ctx, Consumer<Player> action) {
         if (ctx.getSource().getExecutor() instanceof Player player) {
             action.accept(player);
         } else {
@@ -242,7 +245,7 @@ public final class BingoCommand {
     private CompletableFuture<Suggestions> suggestTeams(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         String remaining = builder.getRemainingLowerCase();
         for (Team team : game.teams().all()) {
-            if (team.name().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
+            if (team.name().toLowerCase(Locale.ROOT).startsWith(remaining)) {
                 builder.suggest(team.name());
             }
         }
@@ -256,7 +259,7 @@ public final class BingoCommand {
         }
         String trimmed = rawArgs.trim();
         String[] parts = trimmed.split("\\s+", 2);
-        String first = parts[0].toLowerCase(java.util.Locale.ROOT);
+        String first = parts[0].toLowerCase(Locale.ROOT);
         Boolean lockout = null;
         String seed = null;
 
@@ -295,7 +298,7 @@ public final class BingoCommand {
     private CompletableFuture<Suggestions> suggestMatchIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         String remaining = builder.getRemainingLowerCase();
         for (var summary : plugin.matchHistory().summaries()) {
-            if (summary.id().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
+            if (summary.id().toLowerCase(Locale.ROOT).startsWith(remaining)) {
                 builder.suggest(summary.id());
             }
         }
@@ -315,7 +318,7 @@ public final class BingoCommand {
             }
         }
         for (var summary : plugin.matchHistory().summaries()) {
-            if (summary.id().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
+            if (summary.id().toLowerCase(Locale.ROOT).startsWith(remaining)) {
                 builder.suggest(summary.id());
             }
         }

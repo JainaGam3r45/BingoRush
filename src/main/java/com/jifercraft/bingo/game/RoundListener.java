@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Turns gameplay events into claim checks. The events cover the fast paths:
@@ -125,7 +126,7 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onItemHeld(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        org.bukkit.inventory.ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
+        ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
         if (newItem != null && newItem.getType() == Material.COMPASS) {
             game.pointCompass(player, false);
         }
