@@ -3,6 +3,7 @@ package com.jifercraft.bingo.config;
 import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.card.ItemTier;
 import com.jifercraft.bingo.card.WinMode;
+import com.jifercraft.bingo.game.BingoGameMode;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import java.util.ArrayList;
@@ -16,7 +17,9 @@ import java.util.Set;
 import net.kyori.adventure.key.InvalidKeyException;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.format.TextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.advancement.Advancement;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.inventory.ItemType;
@@ -41,6 +44,7 @@ public final class BingoConfig {
         }
     }
 
+    private final BingoGameMode gameMode;
     private final WinMode winMode;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
@@ -50,16 +54,20 @@ public final class BingoConfig {
     private final int scatterRadius;
     private final LateJoin lateJoin;
     private final ItemPool pool;
+    private final ItemPool advancementPool;
     private final Map<String, ItemType> itemsByKey;
+    private final Map<String, Advancement> advancementsByKey;
     private final Map<SoundId, Key> sounds;
     private final List<TeamDefinition> teamDefinitions;
     private final boolean updateNotifierEnabled;
     private final boolean updateNotifierOnJoin;
 
-    private BingoConfig(WinMode winMode, long timeLimitSeconds, int countdownSeconds, int teamSize,
+    private BingoConfig(BingoGameMode gameMode, WinMode winMode, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
-            ItemPool pool, Map<String, ItemType> itemsByKey, Map<SoundId, Key> sounds,
+            ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
+            Map<String, Advancement> advancementsByKey, Map<SoundId, Key> sounds,
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin) {
+        this.gameMode = gameMode;
         this.winMode = winMode;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
@@ -69,7 +77,9 @@ public final class BingoConfig {
         this.scatterRadius = scatterRadius;
         this.lateJoin = lateJoin;
         this.pool = pool;
+        this.advancementPool = advancementPool;
         this.itemsByKey = itemsByKey;
+        this.advancementsByKey = advancementsByKey;
         this.sounds = sounds;
         this.teamDefinitions = teamDefinitions;
         this.updateNotifierEnabled = updateNotifierEnabled;
@@ -78,6 +88,15 @@ public final class BingoConfig {
 
     public static BingoConfig load(FileConfiguration yaml) {
         List<String> problems = new ArrayList<>();
+
+        BingoGameMode gameMode = BingoGameMode.ITEMS;
+        String rawGameMode = yaml.getString("game-mode", "items");
+        BingoGameMode parsedMode = BingoGameMode.parse(rawGameMode);
+        if (parsedMode != null) {
+            gameMode = parsedMode;
+        } else {
+            problems.add("game-mode is '" + rawGameMode + "', use 'items' or 'advancements'");
+        }
 
         WinMode winMode = WinMode.FULL_CARD;
         String rawMode = yaml.getString("win-mode", "full");
@@ -166,6 +185,66 @@ public final class BingoConfig {
             }
         }
 
+        ItemPool advancementPool = null;
+        Map<String, Advancement> advancements = new HashMap<>();
+        ConfigurationSection advTiers = yaml.getConfigurationSection("advancement-pool.tiers");
+        if (advTiers == null) {
+            advTiers = yaml.getConfigurationSection("advancement-card.tiers");
+        }
+        if (advTiers == null) {
+            problems.add("There is no advancement-pool.tiers section, so no advancement card can be generated");
+        } else {
+            List<ItemTier> parsedAdvTiers = new ArrayList<>();
+            for (String id : advTiers.getKeys(false)) {
+                ConfigurationSection tier = advTiers.getConfigurationSection(id);
+                if (tier == null) {
+                    problems.add("advancement-pool.tiers." + id + " must be a section with 'cells' and 'advancements'");
+                    continue;
+                }
+                int cells = tier.getInt("cells", -1);
+                if (cells < 0) {
+                    problems.add("advancement-pool.tiers." + id + ".cells is missing or negative");
+                    continue;
+                }
+                List<String> rawAdvancements = tier.getStringList("advancements");
+                if (rawAdvancements.isEmpty()) {
+                    rawAdvancements = tier.getStringList("items");
+                }
+                List<String> valid = new ArrayList<>();
+                for (String raw : rawAdvancements) {
+                    String normalized = raw.contains(":") ? raw : "minecraft:" + raw;
+                    NamespacedKey key = NamespacedKey.fromString(normalized.toLowerCase(Locale.ROOT));
+                    if (key == null) {
+                        problems.add("advancement-pool.tiers." + id + " has an advancement key that cannot be read: '" + raw + "'");
+                        continue;
+                    }
+                    if (key.getNamespace().equals("minecraft") && key.getKey().startsWith("recipes/")) {
+                        problems.add("advancement-pool.tiers." + id + " lists a recipe unlock, only real advancements are allowed: '" + raw + "'");
+                        continue;
+                    }
+                    if (Bukkit.getServer() != null) {
+                        Advancement adv = Bukkit.getAdvancement(key);
+                        if (adv == null) {
+                            problems.add("advancement-pool.tiers." + id + " has an advancement that does not exist: '" + raw + "'");
+                            continue;
+                        }
+                        if (adv.getDisplay() == null) {
+                            problems.add("advancement-pool.tiers." + id + " has an advancement with no display: '" + raw + "'");
+                            continue;
+                        }
+                        advancements.put(key.toString(), adv);
+                    }
+                    valid.add(key.toString());
+                }
+                parsedAdvTiers.add(new ItemTier(id, cells, valid));
+            }
+            try {
+                advancementPool = new ItemPool(parsedAdvTiers);
+            } catch (IllegalArgumentException e) {
+                problems.add("The advancement pool cannot fill a card: " + e.getMessage());
+            }
+        }
+
         Map<SoundId, Key> sounds = new EnumMap<>(SoundId.class);
         for (SoundId id : SoundId.values()) {
             String raw = yaml.getString("sounds." + id.configKey());
@@ -213,9 +292,13 @@ public final class BingoConfig {
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(winMode, timeLimit, countdown, teamSize, clearInventories,
-                scatterPlayers, scatterRadius, lateJoin, pool, types, sounds, teamDefinitions,
-                updateNotifierEnabled, updateNotifierOnJoin);
+        return new BingoConfig(gameMode, winMode, timeLimit, countdown, teamSize, clearInventories,
+                scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
+                teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin);
+    }
+
+    public BingoGameMode gameMode() {
+        return gameMode;
     }
 
     public WinMode winMode() {
@@ -255,8 +338,25 @@ public final class BingoConfig {
         return pool;
     }
 
+    public ItemPool itemPool() {
+        return pool;
+    }
+
+    public ItemPool advancementPool() {
+        return advancementPool;
+    }
+
     public ItemType itemType(String itemKey) {
         return itemsByKey.get(itemKey);
+    }
+
+    public Advancement advancement(String advancementKey) {
+        Advancement adv = advancementsByKey.get(advancementKey);
+        if (adv != null) {
+            return adv;
+        }
+        NamespacedKey key = NamespacedKey.fromString(advancementKey);
+        return key != null && Bukkit.getServer() != null ? Bukkit.getAdvancement(key) : null;
     }
 
     /** The sound for one event, or null when the admin left it empty. */

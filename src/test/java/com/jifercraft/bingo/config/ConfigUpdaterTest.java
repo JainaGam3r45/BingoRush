@@ -61,4 +61,45 @@ class ConfigUpdaterTest {
         assertTrue(updated.contains("claim: \"<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)</muted>\""));
         assertFalse(updated.contains("'\n"));
     }
+
+    @Test
+    void updatesAdvancementPoolPreservingComments() {
+        List<String> jarLines = List.of(
+                "# Game mode",
+                "game-mode: items",
+                "",
+                "# Advancement card pool",
+                "advancement-pool:",
+                "  tiers:",
+                "    easy:",
+                "      cells: 10",
+                "      advancements:",
+                "        - minecraft:story/mine_stone",
+                "        - minecraft:story/upgrade_tools"
+        );
+
+        String userYamlStr = """
+                # Existing user config
+                game-mode: advancements
+                """;
+
+        YamlConfiguration folderConfig = new YamlConfiguration();
+        try {
+            folderConfig.loadFromString(userYamlStr);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        folderConfig.set("game-mode", "advancements");
+        folderConfig.set("advancement-pool.tiers.easy.cells", 10);
+        folderConfig.set("advancement-pool.tiers.easy.advancements",
+                List.of("minecraft:story/mine_stone", "minecraft:story/upgrade_tools"));
+
+        String updated = ConfigUpdater.buildUpdatedContent(jarLines, folderConfig);
+        assertTrue(updated.contains("# Game mode"));
+        assertTrue(updated.contains("game-mode: \"advancements\""));
+        assertTrue(updated.contains("# Advancement card pool"));
+        assertTrue(updated.contains("cells: 10"));
+        assertTrue(updated.contains("- \"minecraft:story/mine_stone\""));
+    }
 }

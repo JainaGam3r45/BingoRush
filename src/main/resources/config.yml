@@ -2,6 +2,10 @@
 # Values the plugin reads are checked when it loads this file; mistakes are
 # printed to the console, one line each, naming the key to fix.
 
+# Game mode: "items" for classic item collection, "advancements" for vanilla
+# advancement hunt.
+game-mode: items
+
 # How a round is won: "full" fills the whole card, "line" completes one row,
 # column or diagonal.
 win-mode: full
@@ -107,6 +111,72 @@ card:
         - minecraft:elytra
         - minecraft:heart_of_the_sea
         - minecraft:nether_star
+
+# The 25 cells of the advancement card come from these tiers. Advancements are
+# checked against Bukkit.getAdvancement when loading this file; mistakes are
+# printed to the console, one line each. Recipe unlocks (minecraft:recipes/*)
+# must not be used here.
+advancement-pool:
+  tiers:
+    easy:
+      cells: 10
+      advancements:
+        - minecraft:story/mine_stone
+        - minecraft:story/upgrade_tools
+        - minecraft:story/smelt_iron
+        - minecraft:husbandry/breed_an_animal
+        - minecraft:story/obtain_armor
+        - minecraft:story/deflect_arrow
+        - minecraft:husbandry/plant_seed
+        - minecraft:husbandry/tame_an_animal
+        - minecraft:adventure/sleep_in_bed
+        - minecraft:adventure/shoot_arrow
+        - minecraft:husbandry/fishy_business
+        - minecraft:adventure/kill_a_mob
+        - minecraft:story/iron_tools
+        - minecraft:husbandry/make_a_sign_glow
+    medium:
+      cells: 8
+      advancements:
+        - minecraft:nether/find_fortress
+        - minecraft:story/lava_bucket
+        - minecraft:story/form_obsidian
+        - minecraft:story/mine_diamond
+        - minecraft:story/enchant_item
+        - minecraft:story/enter_the_nether
+        - minecraft:nether/obtain_blaze_rod
+        - minecraft:nether/distract_piglin
+        - minecraft:nether/find_bastion
+        - minecraft:adventure/trade
+        - minecraft:adventure/ol_betsy
+        - minecraft:adventure/summon_iron_golem
+        - minecraft:husbandry/safely_harvest_honey
+        - minecraft:husbandry/ride_a_boat_with_a_goat
+    hard:
+      cells: 5
+      advancements:
+        - minecraft:nether/brew_potion
+        - minecraft:story/cure_zombie_villager
+        - minecraft:adventure/sniper_duel
+        - minecraft:nether/return_to_sender
+        - minecraft:adventure/hero_of_the_village
+        - minecraft:adventure/voluntary_exile
+        - minecraft:adventure/bullseye
+        - minecraft:adventure/two_birds_one_arrow
+        - minecraft:nether/obtain_ancient_debris
+        - minecraft:nether/get_wither_skull
+        - minecraft:story/follow_ender_eye
+        - minecraft:story/enter_the_end
+    epic:
+      cells: 2
+      advancements:
+        - minecraft:end/kill_dragon
+        - minecraft:nether/all_potions
+        - minecraft:adventure/totem_of_undying
+        - minecraft:nether/summon_wither
+        - minecraft:end/elytra
+        - minecraft:end/dragon_egg
+        - minecraft:nether/netherite_armor
 
 # Vanilla sound keys played at each moment. An empty value plays nothing;
 # a key that does not exist is reported at load and then ignored.

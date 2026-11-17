@@ -2,6 +2,7 @@ package com.jifercraft.bingo.card;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -89,4 +90,33 @@ class CardGeneratorTest {
         assertEquals(CardGenerator.seedFrom("evento-verano"), CardGenerator.seedFrom("evento-verano"));
         assertNotEquals(CardGenerator.seedFrom("evento-verano"), CardGenerator.seedFrom("evento-invierno"));
     }
+
+    @Test
+    void generatesAdvancementCardFromAdvancementPool() {
+        ItemPool advancementPool = new ItemPool(List.of(
+                new ItemTier("easy", 10, List.of(
+                        "minecraft:story/mine_stone", "minecraft:story/upgrade_tools",
+                        "minecraft:story/smelt_iron", "minecraft:husbandry/breed_an_animal",
+                        "minecraft:story/obtain_armor", "minecraft:story/deflect_arrow",
+                        "minecraft:husbandry/plant_seed", "minecraft:husbandry/tame_an_animal",
+                        "minecraft:adventure/sleep_in_bed", "minecraft:adventure/shoot_arrow")),
+                new ItemTier("medium", 8, List.of(
+                        "minecraft:nether/find_fortress", "minecraft:story/lava_bucket",
+                        "minecraft:story/form_obsidian", "minecraft:story/mine_diamond",
+                        "minecraft:story/enchant_item", "minecraft:story/enter_the_nether",
+                        "minecraft:nether/obtain_blaze_rod", "minecraft:nether/distract_piglin")),
+                new ItemTier("hard", 5, List.of(
+                        "minecraft:nether/brew_potion", "minecraft:story/cure_zombie_villager",
+                        "minecraft:adventure/sniper_duel", "minecraft:nether/return_to_sender",
+                        "minecraft:adventure/hero_of_the_village")),
+                new ItemTier("epic", 2, List.of(
+                        "minecraft:end/kill_dragon", "minecraft:nether/all_potions"))));
+
+        BingoCard card = new CardGenerator(advancementPool).generate(12345L);
+        assertEquals(25, card.items().size());
+        assertEquals(25, card.items().stream().distinct().count());
+        assertTrue(card.items().contains("minecraft:end/kill_dragon"));
+        assertTrue(card.items().contains("minecraft:nether/all_potions"));
+    }
 }
+
