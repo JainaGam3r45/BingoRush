@@ -4,6 +4,7 @@ import com.cryptomorin.xseries.XEnchantment;
 import com.cryptomorin.xseries.XMaterial;
 import java.util.List;
 import java.util.Locale;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemFlag;
@@ -76,6 +77,48 @@ final class LegacyItems {
         if (color == null) {
             return fallback;
         }
+        if (NamedTextColor.RED.equals(color) || NamedTextColor.DARK_RED.equals(color) || isReddish(color)) {
+            return XMaterial.matchXMaterial("RED" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.GOLD.equals(color)) {
+            return XMaterial.matchXMaterial("ORANGE" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.YELLOW.equals(color)) {
+            return XMaterial.matchXMaterial("YELLOW" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.GREEN.equals(color)) {
+            return XMaterial.matchXMaterial("LIME" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.DARK_GREEN.equals(color)) {
+            return XMaterial.matchXMaterial("GREEN" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.AQUA.equals(color)) {
+            return XMaterial.matchXMaterial("LIGHT_BLUE" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.DARK_AQUA.equals(color)) {
+            return XMaterial.matchXMaterial("CYAN" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.BLUE.equals(color) || NamedTextColor.DARK_BLUE.equals(color)) {
+            return XMaterial.matchXMaterial("BLUE" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.LIGHT_PURPLE.equals(color)) {
+            return XMaterial.matchXMaterial("PINK" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.DARK_PURPLE.equals(color)) {
+            return XMaterial.matchXMaterial("PURPLE" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.GRAY.equals(color)) {
+            return XMaterial.matchXMaterial("LIGHT_GRAY" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.DARK_GRAY.equals(color)) {
+            return XMaterial.matchXMaterial("GRAY" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.BLACK.equals(color)) {
+            return XMaterial.matchXMaterial("BLACK" + suffix).orElse(fallback);
+        }
+        if (NamedTextColor.WHITE.equals(color)) {
+            return XMaterial.matchXMaterial("WHITE" + suffix).orElse(fallback);
+        }
         int best = 0;
         long bestDistance = Long.MAX_VALUE;
         for (int i = 0; i < DYES.length; i++) {
@@ -89,6 +132,13 @@ final class LegacyItems {
             }
         }
         return XMaterial.matchXMaterial(DYES[best] + suffix).orElse(fallback);
+    }
+
+    private static boolean isReddish(TextColor color) {
+        int r = color.red();
+        int g = color.green();
+        int b = color.blue();
+        return r > 160 && g < 110 && b < 110;
     }
 
     /** "minecraft:story/mine_stone" as "Mine Stone", for places that only take plain text. */

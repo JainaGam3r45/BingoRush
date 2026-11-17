@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -351,6 +352,48 @@ public final class CardMenu {
         if (color == null) {
             return ItemType.RED_STAINED_GLASS_PANE;
         }
+        if (NamedTextColor.RED.equals(color) || NamedTextColor.DARK_RED.equals(color) || isReddish(color)) {
+            return ItemType.RED_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.GOLD.equals(color)) {
+            return ItemType.ORANGE_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.YELLOW.equals(color)) {
+            return ItemType.YELLOW_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.GREEN.equals(color)) {
+            return ItemType.LIME_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.DARK_GREEN.equals(color)) {
+            return ItemType.GREEN_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.AQUA.equals(color)) {
+            return ItemType.LIGHT_BLUE_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.DARK_AQUA.equals(color)) {
+            return ItemType.CYAN_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.BLUE.equals(color) || NamedTextColor.DARK_BLUE.equals(color)) {
+            return ItemType.BLUE_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.LIGHT_PURPLE.equals(color)) {
+            return ItemType.PINK_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.DARK_PURPLE.equals(color)) {
+            return ItemType.PURPLE_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.GRAY.equals(color)) {
+            return ItemType.LIGHT_GRAY_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.DARK_GRAY.equals(color)) {
+            return ItemType.GRAY_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.BLACK.equals(color)) {
+            return ItemType.BLACK_STAINED_GLASS_PANE;
+        }
+        if (NamedTextColor.WHITE.equals(color)) {
+            return ItemType.WHITE_STAINED_GLASS_PANE;
+        }
         int r = color.red();
         int g = color.green();
         int b = color.blue();
@@ -388,5 +431,12 @@ public final class CardMenu {
             }
         }
         return best;
+    }
+
+    private static boolean isReddish(TextColor color) {
+        int r = color.red();
+        int g = color.green();
+        int b = color.blue();
+        return r > 160 && g < 110 && b < 110;
     }
 }
