@@ -56,16 +56,7 @@ public final class ConfigUpdater {
         YamlConfiguration jarConfig = YamlConfiguration.loadConfiguration(
                 new InputStreamReader(jarStreamForYaml, StandardCharsets.UTF_8));
 
-        boolean hasChanges = false;
-        for (String key : jarConfig.getKeys(true)) {
-            if (folderConfig.get(key) != null) {
-                continue;
-            }
-            folderConfig.set(key, jarConfig.get(key));
-            hasChanges = true;
-        }
-
-        if (!hasChanges) {
+        if (!mergeMissing(jarConfig, folderConfig)) {
             return;
         }
 
@@ -77,12 +68,39 @@ public final class ConfigUpdater {
         }
     }
 
+    /** Copies keys the template has and the server file lacks. True when anything was added. */
+    static boolean mergeMissing(YamlConfiguration jarConfig, YamlConfiguration folderConfig) {
+        boolean hasChanges = false;
+        for (String key : jarConfig.getKeys(true)) {
+            if (folderConfig.get(key) != null) {
+                continue;
+            }
+            folderConfig.set(key, jarConfig.get(key));
+            hasChanges = true;
+        }
+        return hasChanges;
+    }
+
     static String buildUpdatedContent(List<String> jarLines, YamlConfiguration folderConfig) {
         Map<Integer, FileLine> fileMap = new LinkedHashMap<>();
         int positions = 0;
 
+        // Indent of the list header we are inside, or -1. The list is rewritten
+        // from the server's values, so every template line under it is skipped,
+        // not only the "- " ones. Otherwise the second key of a map item (the
+        // color under "- name: Rojo") leaks out as a stray "color: null".
+        int listIndent = -1;
         for (int i = 0; i < jarLines.size(); i++) {
             String line = jarLines.get(i);
+            if (listIndent >= 0) {
+                if (line.isBlank() || indentOf(line) > listIndent || isListContent(line)) {
+                    if (line.isBlank()) {
+                        fileMap.put(positions++, new FileLine(line, false, false, false));
+                    }
+                    continue;
+                }
+                listIndent = -1;
+            }
             if (isListContent(line)) {
                 continue;
             }
@@ -93,6 +111,9 @@ public final class ConfigUpdater {
                 boolean isHeader = split.length == 1 || split[1].trim().isEmpty() || isComment(split[1].trim());
                 boolean isList = isHeader && i + 1 < jarLines.size() && isListContent(jarLines.get(i + 1));
                 fileMap.put(positions++, new FileLine(line, isValue, isHeader, isList));
+                if (isList) {
+                    listIndent = indentOf(line);
+                }
                 continue;
             }
 
@@ -192,6 +213,14 @@ public final class ConfigUpdater {
 
     private static boolean isComment(String s) {
         return s.trim().startsWith("#");
+    }
+
+    private static int indentOf(String s) {
+        int spaces = 0;
+        while (spaces < s.length() && s.charAt(spaces) == ' ') {
+            spaces++;
+        }
+        return spaces;
     }
 
     private static boolean isListContent(String s) {
