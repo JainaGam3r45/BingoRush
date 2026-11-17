@@ -208,15 +208,15 @@ public final class ConfigUpdater {
             builder.append(line).append("\n");
         }
 
-        // Blank lines at the end of the template used to pile up in every
-        // rewritten file; one final newline is enough.
+        // Blank lines at the end of the template would otherwise be copied
+        // into every rewritten file; one final newline is enough.
         return builder.toString().stripTrailing() + "\n";
     }
 
     /**
-     * A YAML double-quoted scalar. A raw line break inside the quotes folds
-     * into a space on the next load, so the pagination line in messages.yml
-     * lost its line break after one rewrite.
+     * A YAML double-quoted scalar. Line breaks and backslashes are escaped:
+     * a raw line break inside the quotes folds into a space on the next load,
+     * which would flatten messages such as the history pagination.
      */
     static String quote(String value) {
         StringBuilder out = new StringBuilder(value.length() + 2).append('"');

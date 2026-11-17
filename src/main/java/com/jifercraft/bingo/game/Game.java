@@ -1390,8 +1390,7 @@ public final class Game {
         }
     }
 
-    // Players who are offline right now used to lose their saved inventory
-    // here; they get it on their next login instead.
+    // Players who are offline right now get theirs on their next login.
     private void restoreInventories() {
         for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
