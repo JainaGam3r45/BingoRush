@@ -135,6 +135,20 @@ public final class BingoRush extends JavaPlugin {
     }
 
     /**
+     * A sidebar title. Before 1.13 it stops at 32 characters, from 1.13 at
+     * 128; a gradient that does not fit falls back to plain text.
+     */
+    public String objectiveTitle(Component title) {
+        int max = ServerVersion.atLeast(13) ? 128 : 32;
+        String legacy = messages.legacy(title);
+        if (legacy.length() <= max) {
+            return legacy;
+        }
+        String plain = PlainTextComponentSerializer.plainText().serialize(title);
+        return plain.length() <= max ? plain : plain.substring(0, max);
+    }
+
+    /**
      * Rereads both files. A broken config keeps the previous one and prints
      * every problem to the console, so the round in progress is never lost
      * over a typo. The teams are runtime state and survive a reload.
@@ -143,6 +157,7 @@ public final class BingoRush extends JavaPlugin {
         ConfigUpdater.update(this, "config.yml");
         reloadConfig();
         messages.reload();
+        game.cardTextChanged();
         loadConfigOrLog();
         if (updateChecker != null) {
             if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {

@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -45,6 +46,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
@@ -67,6 +69,7 @@ public final class Game {
     private final AdvancementSupport advancements;
     // True while advancements are handed back; see awardQuietly.
     private boolean restoringAdvancements;
+    private ItemMeta cardReference;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     // Game mode each knocked out player had before turning spectator.
     private final Map<UUID, GameMode> savedGameModes = new HashMap<>();
@@ -679,11 +682,37 @@ public final class Game {
     }
 
     /** True when the stack is the physical card item. */
+    // Old versions have no item data to tag the card with, so it is told
+    // apart by its name and lore. From 1.13 the server stores those as
+    // components and may rewrite the color codes, so the comparison is
+    // against a card read back the same way, not against the text we wrote.
     public boolean isCardItem(ItemStack stack) {
-        if (stack == null || !stack.hasItemMeta() || !stack.getItemMeta().hasDisplayName()) {
+        if (stack == null || stack.getType() != Material.BOOK || !stack.hasItemMeta()) {
             return false;
         }
-        return stack.getItemMeta().getDisplayName().endsWith(LegacyItems.CARD_MARKER);
+        ItemMeta meta = stack.getItemMeta();
+        if (!meta.hasDisplayName()) {
+            return false;
+        }
+        if (meta.getDisplayName().endsWith(LegacyItems.CARD_MARKER)) {
+            return true;
+        }
+        if (cardReference == null) {
+            cardReference = buildCard().getItemMeta();
+        }
+        return meta.getDisplayName().equals(cardReference.getDisplayName())
+                && Objects.equals(meta.getLore(), cardReference.getLore());
+    }
+
+    /** The language changed, so the card has another name from now on. */
+    public void cardTextChanged() {
+        cardReference = null;
+    }
+
+    private ItemStack buildCard() {
+        return LegacyItems.item(XMaterial.BOOK,
+                messages().legacy(messages().render("card-item-name")) + LegacyItems.CARD_MARKER,
+                Collections.singletonList(messages().legacy(messages().render("card-item-lore"))), false);
     }
 
     /** One card item per member of every team, after their inventories cleared. */
@@ -700,9 +729,7 @@ public final class Game {
 
     private void giveCardItem(Player player) {
         removeCardItems(player);
-        ItemStack card = LegacyItems.item(XMaterial.BOOK,
-                messages().legacy(messages().render("card-item-name")) + LegacyItems.CARD_MARKER,
-                Collections.singletonList(messages().legacy(messages().render("card-item-lore"))), false);
+        ItemStack card = buildCard();
         Map<Integer, ItemStack> leftover = player.getInventory().addItem(card);
         for (ItemStack rest : leftover.values()) {
             player.getWorld().dropItemNaturally(player.getLocation(), rest);

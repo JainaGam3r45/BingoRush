@@ -204,6 +204,11 @@ public final class Messages {
         return legacy.serialize(component);
     }
 
+    /** § text in the 16 classic colors only, for places with a tight length limit. */
+    public String legacyClassic(Component component) {
+        return LegacyComponentSerializer.legacySection().serialize(component);
+    }
+
     public List<String> legacy(List<Component> components) {
         List<String> lines = new ArrayList<>(components.size());
         for (Component component : components) {

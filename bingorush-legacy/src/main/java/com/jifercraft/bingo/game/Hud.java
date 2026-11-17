@@ -92,7 +92,7 @@ public final class Hud {
         totalMs = timeLimitSeconds * 1000;
         scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
         sidebar = scoreboard.registerNewObjective("bingo", "dummy");
-        sidebar.setDisplayName(fit(messages().legacy(messages().render("sidebar-title")), 32));
+        sidebar.setDisplayName(plugin.objectiveTitle(messages().render("sidebar-title")));
         sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
         for (Player player : participants()) {
             previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
@@ -240,12 +240,16 @@ public final class Hud {
         lines.add(messages().render("sidebar-separator"));
         lines.add(messages().render("sidebar-footer"));
 
-        // Scoreboard entries before 1.13 hold 40 characters, color codes included.
-        int width = ServerVersion.atLeast(13) ? 120 : 36;
+        // Until 1.18 the protocol caps a scoreboard entry at 40 characters,
+        // codes included, and a longer one can disconnect the client. A hex
+        // color takes 14 of them per change, so those versions get the 16
+        // classic colors, and 38 characters plus the 2 of the unique code.
+        boolean roomy = ServerVersion.atLeast(18);
         Set<String> current = new HashSet<>();
         int score = lines.size();
         for (int i = 0; i < lines.size() && i < UNIQUE.length(); i++) {
-            String entry = fit(messages().legacy(lines.get(i)), width) + "§" + UNIQUE.charAt(i);
+            String text = roomy ? messages().legacy(lines.get(i)) : messages().legacyClassic(lines.get(i));
+            String entry = fit(text, roomy ? 120 : 38) + "§" + UNIQUE.charAt(i);
             current.add(entry);
             sidebar.getScore(entry).setScore(score--);
         }
