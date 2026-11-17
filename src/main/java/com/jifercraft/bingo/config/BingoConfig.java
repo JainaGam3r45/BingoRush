@@ -292,9 +292,16 @@ public final class BingoConfig {
                 problems.add("The team '" + name + "' appears twice in the teams list");
                 continue;
             }
-            TextColor color = TextColor.fromHexString(entry.get("color") == null ? null : entry.get("color").toString());
+            // fromHexString throws on null in current Adventure, so a team with
+            // no color has to be caught here or the whole plugin fails to enable.
+            Object rawColor = entry.get("color");
+            if (rawColor == null) {
+                problems.add("teams." + i + " (" + name + ") has no color, add one like color: \"#FF5555\"");
+                continue;
+            }
+            TextColor color = TextColor.fromHexString(rawColor.toString());
             if (color == null) {
-                problems.add("teams." + i + " has a color that is not a hex color like #FF5555");
+                problems.add("teams." + i + " (" + name + ") has a color that is not a hex color like #FF5555");
                 continue;
             }
             teamDefinitions.add(new TeamDefinition(name.toString(), color.value()));

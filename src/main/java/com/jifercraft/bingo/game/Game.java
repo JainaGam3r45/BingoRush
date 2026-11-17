@@ -22,6 +22,7 @@ import java.util.Random;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -1208,8 +1209,7 @@ public final class Game {
                 Placeholder.unparsed("total", String.valueOf(totalPages)));
 
         for (MatchSummary summary : history.page(page, pageSize)) {
-            TextColor color = TextColor.fromHexString(summary.winnerColor());
-            Component winnerComp = Component.text(summary.winnerName(), color != null ? color : TextColor.color(0xFFFFFF));
+            Component winnerComp = Component.text(summary.winnerName(), hexColor(summary.winnerColor()));
             Component viewBtn = messages().render("history.view-button")
                     .hoverEvent(messages().render("history.view-hover", Placeholder.unparsed("id", summary.id())))
                     .clickEvent(ClickEvent.runCommand("/bingo history " + summary.id()));
@@ -1280,8 +1280,7 @@ public final class Game {
         messages().send(sender, "history.detail-seed", Placeholder.unparsed("seed", String.valueOf(record.seed())));
 
         if (record.winner() != null) {
-            TextColor color = TextColor.fromHexString(record.winner().color());
-            Component winnerComp = Component.text(record.winner().name(), color != null ? color : TextColor.color(0xFFFFFF));
+            Component winnerComp = Component.text(record.winner().name(), hexColor(record.winner().color()));
             messages().send(sender, "history.detail-winner",
                     Placeholder.component("winner", winnerComp),
                     Placeholder.unparsed("count", String.valueOf(record.winner().claims())));
@@ -1293,8 +1292,7 @@ public final class Game {
             messages().send(sender, "history.detail-ranking-header");
             int pos = 1;
             for (MatchRecord.TeamResult team : record.ranking()) {
-                TextColor color = TextColor.fromHexString(team.color());
-                Component teamComp = Component.text(team.name(), color != null ? color : TextColor.color(0xFFFFFF));
+                Component teamComp = Component.text(team.name(), hexColor(team.color()));
                 messages().send(sender, "history.detail-ranking-entry",
                         Placeholder.unparsed("pos", String.valueOf(pos)),
                         Placeholder.component("team", teamComp),
@@ -1445,6 +1443,12 @@ public final class Game {
             }
         }
         return names;
+    }
+
+    // Match files can be edited by hand, and fromHexString throws on null.
+    private static TextColor hexColor(String hex) {
+        TextColor color = hex == null ? null : TextColor.fromHexString(hex);
+        return color != null ? color : NamedTextColor.WHITE;
     }
 
     private Messages messages() {
