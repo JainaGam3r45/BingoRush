@@ -50,7 +50,7 @@ Admin commands (`bingo.admin`):
 - `/bingo card <team>`: watches a team's card, for casters.
 - `/bingo teams <add|remove|join|clear>`: manages teams and assignments.
 - `/bingo history [page|id]`, `/bingo history clear`, `/bingo export <id>`: match history.
-- `/bingo reload`: rereads `config.yml` and `messages.yml`.
+- `/bingo reload`: rereads `config.yml` and the language files.
 
 `bingo.update` (default: op) receives update notices on join.
 
@@ -59,7 +59,7 @@ Admin commands (`bingo.admin`):
 Files live in `plugins/BingoRush/`. New keys are added to existing files on startup and your values are kept.
 
 - `config.yml`: game mode, win mode, lockout, lives, time limit, teams, item and advancement pools, sounds, round chat, the advancements tab, update checks and history.
-- `messages.yml`: everything players read, in MiniMessage, with the color palette at the top.
+- `lang/messages_<code>.yml`: everything players read, in MiniMessage, with the color palette at the top. English (`en`, the default) and Spanish (`es`) ship with the plugin; pick one with `language` in `config.yml`, or copy `messages_en.yml` to add your own. Missing keys fall back to English.
 
 ## License and credits
 
