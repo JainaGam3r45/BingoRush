@@ -61,6 +61,7 @@ public final class BingoRush extends JavaPlugin {
             teams.reset(bingoConfig.teamDefinitions());
         }
         game.loadSavedRoundIfPresent();
+        game.display().applyAll(teams.all());
         getServer().getPluginManager().registerEvents(new RoundListener(this, game), this);
         BingoCommand commands = new BingoCommand(this, game);
         for (String name : new String[]{"bingo", "card", "teams", "setup"}) {

@@ -159,6 +159,7 @@ public final class TeamMenu {
         target.add(player.getUniqueId());
         messages.send(player, "team-joined", Game.teamPlaceholder(target));
         game.playSound(player, BingoConfig.SoundId.TEAM_CHIME);
+        game.display().apply(player, target);
         refreshAll();
     }
 
@@ -172,6 +173,7 @@ public final class TeamMenu {
         current.remove(player.getUniqueId());
         messages.send(player, "team-left");
         game.playSound(player, BingoConfig.SoundId.MENU_CLICK);
+        game.display().apply(player, null);
         refreshAll();
     }
 

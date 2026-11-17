@@ -230,6 +230,12 @@ public final class Messages {
         return colors.get(name);
     }
 
+    /** True when the template of a key contains some text, to check what an admin wrote. */
+    public boolean templateHas(String key, String text) {
+        String raw = yaml.getString(key);
+        return raw != null && raw.contains(text);
+    }
+
     public void close() {
         audiences.close();
     }

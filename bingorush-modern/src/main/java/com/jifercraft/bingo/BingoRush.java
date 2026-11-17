@@ -52,6 +52,7 @@ public final class BingoRush extends JavaPlugin {
         matchHistory = new MatchHistory(matchesDir, getLogger());
         game = new Game(this, teams);
         game.loadSavedRoundIfPresent();
+        game.display().applyAll(teams.all());
         getServer().getPluginManager().registerEvents(new RoundListener(game), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             BingoCommand bingoCmd = new BingoCommand(this, game);

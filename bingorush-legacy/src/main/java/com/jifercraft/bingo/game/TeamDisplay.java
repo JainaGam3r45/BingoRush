@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -20,12 +21,9 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 /**
  * Team colors in the player list and a team format in chat, for players on a
- * team while a round runs. Both are optional, because another plugin may own
- * the tab or the chat. What it changes it remembers, so the end of the round,
- * or a reload that turns a feature off, takes back exactly that. The list
- * order is not available on these versions, so teams are not grouped.
+ * team. Both are optional, because another plugin may own the tab or the chat.
  */
-final class TeamDisplay {
+public final class TeamDisplay {
 
     // What was there before, and whether a header and footer went out.
     private static final class Applied {
@@ -49,24 +47,30 @@ final class TeamDisplay {
         this.plugin = plugin;
     }
 
-    void applyAll(Collection<Team> teams) {
-        for (Team team : teams) {
-            for (UUID memberId : team.members()) {
-                Player member = Bukkit.getPlayer(memberId);
-                if (member != null) {
-                    apply(member, team);
+    public void applyAll(Collection<Team> teams) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Team team = null;
+            for (Team t : teams) {
+                if (t.hasMember(player.getUniqueId())) {
+                    team = t;
+                    break;
                 }
             }
+            apply(player, team);
         }
     }
 
-    void apply(Player player, Team team) {
+    public void apply(Player player, Team team) {
         BingoConfig config = plugin.bingoConfig();
         if (config == null) {
             return;
         }
         if (config.chatEnabled()) {
-            chatTeams.put(player.getUniqueId(), team);
+            if (team != null) {
+                chatTeams.put(player.getUniqueId(), team);
+            } else {
+                chatTeams.remove(player.getUniqueId());
+            }
         }
         if (config.tabEnabled()) {
             applyTab(player, team);
@@ -80,10 +84,13 @@ final class TeamDisplay {
         // A second apply (a reload, a rejoin) keeps what was there first.
         String previousName = before != null ? before.previousName : player.getPlayerListName();
 
-        player.setPlayerListName(messages.legacy(messages.render("tab-format", tags)));
+        String formatKey = team != null ? "tab-format" : "tab-format-none";
+        player.setPlayerListName(messages.legacy(messages.render(formatKey, tags)));
 
-        Component header = messages.render("tab-header", tags);
-        Component footer = messages.render("tab-footer", tags);
+        String headerKey = team != null ? "tab-header" : "tab-header-none";
+        String footerKey = team != null ? "tab-footer" : "tab-footer-none";
+        Component header = messages.render(headerKey, tags);
+        Component footer = messages.render(footerKey, tags);
         boolean framed = !isBlank(header) || !isBlank(footer);
         if (framed) {
             messages.audience(player).sendPlayerListHeaderAndFooter(header, footer);
@@ -122,36 +129,48 @@ final class TeamDisplay {
 
     /** Runs on the chat thread. */
     void styleChat(AsyncPlayerChatEvent event) {
-        Team team = chatTeams.get(event.getPlayer().getUniqueId());
-        if (team == null) {
+        BingoConfig config = plugin.bingoConfig();
+        if (config == null || !config.chatEnabled()) {
             return;
         }
+        Team team = chatTeams.get(event.getPlayer().getUniqueId());
         Messages messages = plugin.messages();
-        // The player and the message stay as tokens through rendering and
-        // become Bukkit's %1$s and %2$s afterwards; ChatFormat escapes the rest.
-        String format = ChatFormat.toFormat(messages.legacy(messages.render("chat-format",
-                Game.teamPlaceholder(team),
-                Placeholder.unparsed("player", ChatFormat.PLAYER_TOKEN),
-                Placeholder.unparsed("message", ChatFormat.MESSAGE_TOKEN),
-                Placeholder.unparsed("initial", TeamLabel.initial(team.name())),
-                TagResolver.resolver("color", Tag.styling(team.color())))));
-        if (format == null) {
-            // A template without <message> would swallow what players write.
+        String templateKey = team != null ? "chat-format" : "chat-format-none";
+        if (!messages.templateHas(templateKey, "<message>")) {
             if (!warnedAboutChatFormat) {
                 warnedAboutChatFormat = true;
-                plugin.getLogger().warning("chat-format has no <message>, so chat is left as it is until it does");
+                plugin.getLogger().warning(templateKey + " has no <message>, so chat is left as it is until it does");
             }
             return;
         }
-        event.setFormat(format);
+        TagResolver teamTag = team != null ? Game.teamPlaceholder(team) : Placeholder.component("team", Component.empty());
+        TagResolver teamUpperTag = Placeholder.unparsed("team-upper", team != null ? team.name().toUpperCase() : "");
+        TagResolver colorTag = team != null ? TagResolver.resolver("color", Tag.styling(team.color())) : TagResolver.resolver("color", Tag.styling(NamedTextColor.WHITE));
+        TagResolver initialTag = Placeholder.unparsed("initial", team != null ? TeamLabel.initial(team.name()) : "");
+
+        String format = ChatFormat.toFormat(messages.legacy(messages.render(templateKey,
+                teamTag,
+                teamUpperTag,
+                Placeholder.unparsed("player", ChatFormat.PLAYER_TOKEN),
+                Placeholder.unparsed("message", ChatFormat.MESSAGE_TOKEN),
+                initialTag,
+                colorTag)));
+        if (format != null) {
+            event.setFormat(format);
+        }
     }
 
     private static TagResolver[] tags(Player player, Team team) {
+        TagResolver teamTag = team != null ? Game.teamPlaceholder(team) : Placeholder.component("team", Component.empty());
+        TagResolver teamUpperTag = Placeholder.unparsed("team-upper", team != null ? team.name().toUpperCase() : "");
+        TagResolver colorTag = team != null ? TagResolver.resolver("color", Tag.styling(team.color())) : TagResolver.resolver("color", Tag.styling(NamedTextColor.GRAY));
+        TagResolver initialTag = Placeholder.unparsed("initial", team != null ? TeamLabel.initial(team.name()) : "");
         return new TagResolver[]{
-                Game.teamPlaceholder(team),
+                teamTag,
+                teamUpperTag,
                 Placeholder.unparsed("player", player.getName()),
-                Placeholder.unparsed("initial", TeamLabel.initial(team.name())),
-                TagResolver.resolver("color", Tag.styling(team.color()))
+                initialTag,
+                colorTag
         };
     }
 

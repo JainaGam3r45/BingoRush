@@ -224,6 +224,10 @@ public final class Game {
      * passes all its picks; the command passes null for whatever it did not
      * name, which falls back to config.yml.
      */
+    public TeamDisplay display() {
+        return display;
+    }
+
     public void startRound(CommandSender caller, BingoGameMode modeOverride, WinMode winModeOverride,
             Boolean lockoutOverride, Long timeLimitOverride, Integer livesOverride, String seedArg) {
         if (round != null) {
@@ -405,6 +409,7 @@ public final class Game {
         knownNames.put(player.getUniqueId(), player.getName());
         messages().send(player, "team-joined", teamPlaceholder(target));
         teamMenu.refreshAll();
+        display.apply(player, target);
         if (current != null) {
             prepareTeamEntry(player, target, current);
         }
@@ -477,9 +482,9 @@ public final class Game {
         team.remove(player.getUniqueId());
         messages().send(player, "team-left");
         teamMenu.refreshAll();
+        display.apply(player, null);
         if (round != null) {
             hud.playerLeft(player);
-            display.clear(player);
             removeCardItems(player);
             advancements.clearTab(player);
             Map<String, List<String>> owed = advancements.takeOwned(player.getUniqueId());
@@ -612,6 +617,7 @@ public final class Game {
         team.add(target.getUniqueId());
         knownNames.put(target.getUniqueId(), target.getName());
         teamMenu.refreshAll();
+        display.apply(target, team);
         messages().send(caller, "team-assigned",
                 Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
         messages().send(target, "team-joined", teamPlaceholder(team));
@@ -627,6 +633,7 @@ public final class Game {
             }
         }
         teamMenu.refreshAll();
+        display.applyAll(teams.all());
         messages().send(caller, "team-cleared");
     }
 
@@ -733,6 +740,7 @@ public final class Game {
         } else {
             advancements.clearTab(player);
         }
+        display.apply(player, teams.of(player.getUniqueId()));
         if (round != null) {
             Team team = teams.of(player.getUniqueId());
             if (team != null && round.isEliminated(player.getUniqueId())) {
@@ -973,7 +981,7 @@ public final class Game {
         removeCardItemsFromAll();
         retireAdvancementTab();
         advancements.silenceAnnouncements(false);
-        display.clearAll();
+        display.applyAll(teams.all());
         // Last, so whatever restoreInventories queued above reaches the disk.
         pendingRestores.close();
         round = null;
@@ -988,8 +996,8 @@ public final class Game {
     /** After /bingo reload: names, order and chat format follow the new settings. */
     public void settingsReloaded() {
         display.clearAll();
+        display.applyAll(teams.all());
         if (round != null) {
-            display.applyAll(teams.all());
             if (round.state() != Round.State.COUNTDOWN) {
                 // The books were collected before the reload; these carry the new text.
                 for (Team team : teams.all()) {
@@ -1154,7 +1162,7 @@ public final class Game {
         removeCardItemsFromAll();
         retireAdvancementTab();
         advancements.silenceAnnouncements(false);
-        display.clearAll();
+        display.applyAll(teams.all());
         roundWriter.delete();
         roundRestoredUnfinished = false;
         round = null;
