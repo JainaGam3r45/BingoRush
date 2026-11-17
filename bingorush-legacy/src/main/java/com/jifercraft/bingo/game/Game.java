@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
@@ -938,7 +939,7 @@ public final class Game {
         if (round != null) {
             try {
                 RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories, savedGameModes,
-                        advancements.ownedSnapshot());
+                        advancements.ownedSnapshot(), savedMembers());
             } catch (RuntimeException e) {
                 plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             }
@@ -1169,12 +1170,78 @@ public final class Game {
         String json;
         try {
             json = RoundStorage.toJson(round, roundTimeLimit, savedInventories, savedGameModes,
-                    advancements.ownedSnapshot());
+                    advancements.ownedSnapshot(), savedMembers());
         } catch (RuntimeException e) {
             plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             return;
         }
         roundWriter.write(json);
+    }
+
+    private List<TeamMembership.Member> savedMembers() {
+        List<TeamMembership.Member> members = new ArrayList<>();
+        for (Team team : teams.all()) {
+            for (UUID memberId : team.members()) {
+                members.add(new TeamMembership.Member(memberId, team.name(), team.id()));
+            }
+        }
+        return members;
+    }
+
+    // Members come back before the HUD is built, so the sidebar and the tab
+    // know who is on each team. A team the config did not list was made at
+    // runtime, so it is made again from its saved name.
+    private void restoreTeamMembers(List<TeamMembership.Member> members) {
+        if (members.isEmpty()) {
+            return;
+        }
+        if (teams.all().isEmpty()) {
+            Map<Integer, String> namesById = new TreeMap<>();
+            for (TeamMembership.Member member : members) {
+                namesById.putIfAbsent(member.teamId(), member.teamName());
+            }
+            for (Map.Entry<Integer, String> entry : namesById.entrySet()) {
+                if (teams.byName(entry.getValue()) == null) {
+                    teams.createAuto(entry.getValue(), entry.getKey());
+                }
+            }
+        }
+        List<String> names = new ArrayList<>();
+        for (Team team : teams.all()) {
+            names.add(team.name());
+        }
+        Map<UUID, Integer> placement = TeamMembership.resolve(members, names);
+        for (TeamMembership.Member member : members) {
+            Integer teamId = placement.get(member.playerId());
+            Team team = teamId == null ? null : teams.byId(teamId);
+            if (team == null) {
+                plugin.getLogger().warning("The saved team '" + member.teamName()
+                        + "' for " + member.playerId() + " is gone from the config, so that player stays out");
+                continue;
+            }
+            team.add(member.playerId());
+        }
+    }
+
+    // Only matters for a reload with players already connected; after a real
+    // restart everyone comes back through playerJoined.
+    private void restoreOnlineMembers() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Team team = teams.of(player.getUniqueId());
+            if (team == null) {
+                continue;
+            }
+            if (round.isEliminated(player.getUniqueId())) {
+                if (!player.isDead()) {
+                    player.setGameMode(GameMode.SPECTATOR);
+                }
+                removeCardItems(player);
+            } else {
+                giveCardItem(player);
+            }
+            revokeOwnedAdvancements(player, team);
+            advancements.syncTab(player, round, team);
+        }
     }
 
     public void loadSavedRoundIfPresent() {
@@ -1183,6 +1250,7 @@ public final class Game {
         }
         try {
             RoundStorage.RestoredRound restored = RoundStorage.load(activeRoundFile);
+            restoreTeamMembers(restored.members());
             this.round = restored.round();
             this.roundConfig = plugin.bingoConfig();
             this.roundTimeLimit = restored.timeLimitSeconds();
@@ -1197,6 +1265,7 @@ public final class Game {
             // The tab is not saved anywhere; the restart wiped it from the server.
             loadAdvancementTab();
             display.applyAll(teams.all());
+            restoreOnlineMembers();
             // Shutdown put the announceAdvancements rule back; the round needs it off again.
             if (roundConfig != null && roundConfig.advancementChat() != ChatStyle.VANILLA) {
                 advancements.silenceAnnouncements(true);
