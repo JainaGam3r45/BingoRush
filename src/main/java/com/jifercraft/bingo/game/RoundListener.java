@@ -1,5 +1,6 @@
 package com.jifercraft.bingo.game;
 
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -11,6 +12,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -75,6 +77,32 @@ public final class RoundListener implements Listener {
         }
         event.setCancelled(true);
         game.openCard(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onCompassInteract(PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        if (event.getItem() == null || event.getItem().getType() != Material.COMPASS) {
+            return;
+        }
+        if (event.getHand() == EquipmentSlot.HAND) {
+            game.pointCompass(event.getPlayer(), true);
+        } else if (event.getHand() == EquipmentSlot.OFF_HAND
+                && event.getPlayer().getInventory().getItemInMainHand().getType() != Material.COMPASS) {
+            game.pointCompass(event.getPlayer(), true);
+        }
+    }
+
+    @EventHandler
+    public void onItemHeld(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        org.bukkit.inventory.ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
+        if (newItem != null && newItem.getType() == Material.COMPASS) {
+            game.pointCompass(player, false);
+        }
     }
 
     /** The card item cannot be moved into chests or around the inventory. */

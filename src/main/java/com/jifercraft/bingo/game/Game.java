@@ -20,6 +20,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
@@ -241,6 +242,81 @@ public final class Game {
             hud.playerLeft(player);
             removeCardItems(player);
         }
+    }
+
+    public void shareCoordinates(Player player) {
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            messages().send(player, "team-not-in");
+            return;
+        }
+        Location loc = player.getLocation();
+        TagResolver x = Placeholder.unparsed("x", String.valueOf(loc.getBlockX()));
+        TagResolver y = Placeholder.unparsed("y", String.valueOf(loc.getBlockY()));
+        TagResolver z = Placeholder.unparsed("z", String.valueOf(loc.getBlockZ()));
+        TagResolver playerTag = Placeholder.unparsed("player", player.getName());
+        TagResolver teamTag = teamPlaceholder(team);
+        for (UUID memberId : team.members()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null) {
+                messages().send(member, "team-coords", teamTag, playerTag, x, y, z);
+            }
+        }
+    }
+
+    public void pointCompass(Player player, boolean sendFeedback) {
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            if (sendFeedback) {
+                messages().send(player, "team-not-in");
+            }
+            return;
+        }
+        Player nearest = findNearestTeammate(player, team);
+        if (nearest == null) {
+            if (sendFeedback) {
+                player.sendActionBar(messages().render("compass-no-teammate"));
+            }
+            return;
+        }
+        player.setCompassTarget(nearest.getLocation());
+        if (sendFeedback) {
+            int distance = (int) Math.round(player.getLocation().distance(nearest.getLocation()));
+            player.sendActionBar(messages().render("compass-tracking",
+                    Placeholder.unparsed("player", nearest.getName()),
+                    Placeholder.unparsed("distance", String.valueOf(distance))));
+        }
+    }
+
+    public Player findNearestTeammate(Player player, Team team) {
+        Player nearest = null;
+        double bestDistanceSq = Double.MAX_VALUE;
+        Location loc = player.getLocation();
+        World world = loc.getWorld();
+        for (UUID memberId : team.members()) {
+            if (memberId.equals(player.getUniqueId())) {
+                continue;
+            }
+            Player teammate = Bukkit.getPlayer(memberId);
+            if (teammate == null || !teammate.isOnline() || !teammate.getWorld().equals(world)) {
+                continue;
+            }
+            double distSq = loc.distanceSquared(teammate.getLocation());
+            if (distSq < bestDistanceSq) {
+                bestDistanceSq = distSq;
+                nearest = teammate;
+            }
+        }
+        return nearest;
+    }
+
+    public boolean isHoldingCompass(Player player) {
+        ItemStack main = player.getInventory().getItemInMainHand();
+        if (main.getType() == Material.COMPASS) {
+            return true;
+        }
+        ItemStack off = player.getInventory().getItemInOffHand();
+        return off.getType() == Material.COMPASS;
     }
 
     public void createTeam(CommandSender caller, String name, TextColor color) {
@@ -519,6 +595,11 @@ public final class Game {
             return;
         }
         hud.clockTick();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (isHoldingCompass(player)) {
+                pointCompass(player, false);
+            }
+        }
         long remaining = current.remainingMs(roundConfig.timeLimitSeconds());
         if (remaining <= 0) {
             finishByTimeout();

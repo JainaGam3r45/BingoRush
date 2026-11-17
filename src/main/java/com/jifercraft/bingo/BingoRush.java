@@ -37,7 +37,7 @@ public final class BingoRush extends JavaPlugin {
         game = new Game(this, teams);
         getServer().getPluginManager().registerEvents(new RoundListener(game), this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(new BingoCommand(this, game).build()));
+                event.registrar().register(new BingoCommand(this, game).build(), "Bingo minigame", java.util.List.of("b")));
 
         updateChecker = new UpdateChecker(this);
         getServer().getPluginManager().registerEvents(updateChecker, this);
