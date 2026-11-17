@@ -407,25 +407,31 @@ public final class Game {
         messages().send(player, "team-joined", teamPlaceholder(target));
         teamMenu.refreshAll();
         if (current != null) {
-            // Joined during the countdown or a round that allows late play.
-            // Someone who was only watching gets their game mode back to play.
-            GameMode watching = savedGameModes.remove(player.getUniqueId());
-            if (watching != null) {
-                player.setGameMode(watching);
-            }
-            // The others had their inventory emptied when the round started;
-            // without this a late joiner could bring a full backpack.
-            boolean started = current.state() != Round.State.COUNTDOWN;
-            if (started && roundConfig != null && roundConfig.clearInventories()
-                    && !savedInventories.containsKey(player.getUniqueId())) {
-                saveAndClearInventory(player);
-            }
-            giveCardItem(player);
-            hud.playerJoined(player);
-            display.apply(player, target);
-            cardAdvancements.sync(player, current, target);
-            revokeOwnedAdvancements(player, target);
+            prepareTeamEntry(player, target, current);
         }
+    }
+
+    // The player is on the team already; this is what being in a running
+    // round needs on top of that. Both /bingo join and /bingo teams join go
+    // through here so neither path leaves a player without a book or a HUD.
+    private void prepareTeamEntry(Player player, Team target, Round current) {
+        // Someone who was only watching gets their game mode back to play.
+        GameMode watching = savedGameModes.remove(player.getUniqueId());
+        if (watching != null) {
+            player.setGameMode(watching);
+        }
+        // The others had their inventory emptied when the round started;
+        // without this a late joiner could bring a full backpack.
+        boolean started = current.state() != Round.State.COUNTDOWN;
+        if (started && roundConfig != null && roundConfig.clearInventories()
+                && !savedInventories.containsKey(player.getUniqueId())) {
+            saveAndClearInventory(player);
+        }
+        giveCardItem(player);
+        hud.playerJoined(player);
+        display.apply(player, target);
+        cardAdvancements.sync(player, current, target);
+        revokeOwnedAdvancements(player, target);
     }
 
     /** A player without a team watches the running round from spectator mode. */
@@ -588,6 +594,15 @@ public final class Game {
             messages().send(caller, "team-not-found", Placeholder.unparsed("name", teamName));
             return;
         }
+        Round current = round;
+        if (current != null && current.isEliminated(target.getUniqueId())) {
+            messages().send(caller, "team-assign-eliminated",
+                    Placeholder.unparsed("player", target.getName()));
+            if (!caller.equals(target)) {
+                messages().send(target, "eliminated-cannot-join");
+            }
+            return;
+        }
         Team old = teams.of(target.getUniqueId());
         if (old == team) {
             messages().send(caller, "team-already-there",
@@ -603,6 +618,9 @@ public final class Game {
         messages().send(caller, "team-assigned",
                 Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
         messages().send(target, "team-joined", teamPlaceholder(team));
+        if (current != null) {
+            prepareTeamEntry(target, team, current);
+        }
     }
 
     public void clearTeams(CommandSender caller) {
