@@ -1,6 +1,6 @@
 # BingoRush
 
-Bingo minigame for Minecraft event servers running Paper 26.3.
+Bingo minigame for Minecraft event servers, from 1.8.8 to the latest Paper.
 
 Teams compete on a shared 5x5 card. The first team to complete a line or the whole card wins the round.
 
@@ -16,10 +16,16 @@ Teams compete on a shared 5x5 card. The first team to complete a line or the who
 - An unfinished round is saved to disk and comes back paused after a crash or restart.
 - Finished matches are logged to `data/matches/` and can be browsed in game.
 
-## Requirements
+## Which jar
 
-- Paper 26.3 or newer
-- Java 25 or newer
+BingoRush ships two jars. Pick the one that matches your server:
+
+| Jar | Java | Server |
+| :-- | :-- | :-- |
+| `BingoRush-Legacy-<version>.jar` | 8+ | Spigot or Paper 1.8.8 to 1.21.x |
+| `BingoRush-Modern-<version>.jar` | 25+ | Paper 26.x and newer |
+
+Both read the same config and language files. On the Legacy jar, features the server version does not have turn themselves off and say so in the console: advancement rounds, the advancements tab and owned advancements need 1.12, and items or advancements newer than the server are left out of the pools. The advancements tab starts off on the Legacy jar, because older servers reload every player's advancements once per tab entry.
 
 ## Building
 
@@ -27,7 +33,7 @@ Teams compete on a shared 5x5 card. The first team to complete a line or the who
 ./gradlew build
 ```
 
-The jar ends up in `build/libs/`, named after the version, for example `BingoRush-0.2.0.jar`.
+Both jars end up in `build/libs/`. The project has three modules: `bingorush-core` with the game rules and language files (Java 8, no server API), `bingorush-modern` and `bingorush-legacy`.
 
 ## Commands and permissions
 
