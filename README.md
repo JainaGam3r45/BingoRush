@@ -13,6 +13,8 @@ Teams compete on a shared 5x5 card. The first team to complete a line or the who
 - Lives turn deaths into knockouts. A player who runs out watches as a spectator, and the last team standing wins. One life is hardcore.
 - When time runs out, the team with the most cells wins, and the earlier last claim breaks a tie.
 - The card also shows up as its own tab in the advancements screen, with your team's cells marked as done.
+- Optionally, players on a team show in their team color in the tab list and in chat; the Modern jar also groups the tab by team. Both are off by default (`tab.enabled`, `chat.enabled`) because another tab or chat plugin may own them; the texts are in the language files.
+- A player who joins after the start can be put in a team or made a spectator (`late-join`), and `/bingo spectate` lets anyone without a team watch.
 - An unfinished round is saved to disk and comes back paused after a crash or restart.
 - Finished matches are logged to `data/matches/` and can be browsed in game.
 
@@ -45,6 +47,7 @@ Player commands (`bingo.play`):
 - `/bingo card` or `/card`: opens your team's card.
 - `/bingo coords` or `/bingo c`: sends your coordinates to your team.
 - `/bingo leave`: leaves your team.
+- `/bingo spectate`: watches the running round from spectator mode, if you are not on a team.
 - `/bingo version`: shows the installed version; admins also get an update check.
 
 Admin commands (`bingo.admin`):

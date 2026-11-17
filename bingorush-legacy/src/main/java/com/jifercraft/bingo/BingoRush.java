@@ -159,6 +159,7 @@ public final class BingoRush extends JavaPlugin {
         messages.reload();
         game.cardTextChanged();
         loadConfigOrLog();
+        game.settingsReloaded();
         if (updateChecker != null) {
             if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {
                 updateChecker.check(null);

@@ -1,9 +1,11 @@
 package com.jifercraft.bingo.game;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityPickupItemEvent;
@@ -162,6 +164,13 @@ public final class RoundListener implements Listener {
         game.playerRespawned(event.getPlayer());
     }
 
+    // After the chat plugins that set their own format, so the team format of a
+    // round wins while it runs and the player's other plugins keep working outside it.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onChat(AsyncChatEvent event) {
+        game.styleChat(event);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         game.playerJoined(event.getPlayer());
@@ -176,6 +185,6 @@ public final class RoundListener implements Listener {
     /** In case the close event slips past, the quit event drops the menu too. */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        game.menuClosed(event.getPlayer().getUniqueId());
+        game.playerQuit(event.getPlayer().getUniqueId());
     }
 }

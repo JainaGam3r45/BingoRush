@@ -42,6 +42,18 @@ round-chat:
 # feels when the countdown starts, so it starts off here.
 advancement-tab: false
 
+# Team colors in the player list (tab) and a team format for chat, for players
+# on a team while a round runs. Both are off by default: another tab or chat
+# plugin may already own them, since this one sets each player's list name,
+# header and footer, and the format of their chat messages. The texts are
+# tab-format, tab-header, tab-footer and chat-format in the language file.
+# When the round ends the names, the order and the chat format go back to
+# normal; a header or footer another plugin had set is not restored.
+tab:
+  enabled: false
+chat:
+  enabled: false
+
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
 # clock: the round runs until a team completes the card.

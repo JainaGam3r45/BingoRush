@@ -45,6 +45,7 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
@@ -66,6 +67,7 @@ public final class Game {
     private final File activeRoundFile;
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
+    private final TeamDisplay display;
     private final AdvancementSupport advancements;
     // True while advancements are handed back; see awardQuietly.
     private boolean restoringAdvancements;
@@ -95,6 +97,7 @@ public final class Game {
         this.teamMenu = new TeamMenu(plugin, this);
         this.setupMenu = new SetupMenu(plugin, this);
         this.hud = new Hud(plugin, this);
+        this.display = new TeamDisplay(plugin);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
         this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
         this.advancements = AdvancementSupport.load(plugin, this);
@@ -261,6 +264,7 @@ public final class Game {
         // which can take a moment: better during the countdown than on the
         // tick the round starts, and before any inventory is cleared.
         loadAdvancementTab();
+        display.applyAll(teams.all());
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -410,6 +414,7 @@ public final class Game {
             }
             giveCardItem(player);
             hud.playerJoined(player);
+            display.apply(player, target);
             advancements.syncTab(player, current, target);
             revokeOwnedAdvancements(player, target);
         }
@@ -461,6 +466,7 @@ public final class Game {
         teamMenu.refreshAll();
         if (round != null) {
             hud.playerLeft(player);
+            display.clear(player);
             removeCardItems(player);
             advancements.clearTab(player);
             Map<String, List<String>> owed = advancements.takeOwned(player.getUniqueId());
@@ -731,6 +737,7 @@ public final class Game {
             }
             if (team != null) {
                 revokeOwnedAdvancements(player, team);
+                display.apply(player, team);
             }
         } else {
             restoreInventory(player);
@@ -843,10 +850,30 @@ public final class Game {
         removeCardItemsFromAll();
         retireAdvancementTab();
         advancements.silenceAnnouncements(false);
+        display.clearAll();
         // Last, so whatever restoreInventories queued above reaches the disk.
         pendingRestores.close();
         round = null;
         roundConfig = null;
+    }
+
+    /** Chat of a team member during a round, off the main thread. */
+    public void styleChat(AsyncPlayerChatEvent event) {
+        display.styleChat(event);
+    }
+
+    /** After /bingo reload: names, order and chat format follow the new settings. */
+    public void settingsReloaded() {
+        display.clearAll();
+        if (round != null) {
+            display.applyAll(teams.all());
+        }
+    }
+
+    /** A player left the server. */
+    public void playerQuit(UUID playerId) {
+        menuClosed(playerId);
+        display.forget(playerId);
     }
 
     /** A player closed one of our menus; stop tracking it everywhere. */
@@ -983,6 +1010,7 @@ public final class Game {
         removeCardItemsFromAll();
         retireAdvancementTab();
         advancements.silenceAnnouncements(false);
+        display.clearAll();
         roundWriter.delete();
         roundRestoredUnfinished = false;
         round = null;
@@ -1043,6 +1071,7 @@ public final class Game {
             hud.restorePaused(restored.timeLimitSeconds());
             // The tab is not saved anywhere; the restart wiped it from the server.
             loadAdvancementTab();
+            display.applyAll(teams.all());
             // Shutdown put the announceAdvancements rule back; the round needs it off again.
             if (roundConfig != null && roundConfig.advancementChat() != ChatStyle.VANILLA) {
                 advancements.silenceAnnouncements(true);

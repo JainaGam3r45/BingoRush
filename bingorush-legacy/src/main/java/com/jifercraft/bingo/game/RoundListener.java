@@ -5,12 +5,14 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -139,6 +141,13 @@ public final class RoundListener implements Listener {
         });
     }
 
+    // After the chat plugins that set their own format, so the team format of a
+    // round wins while it runs and the player's other plugins keep working outside it.
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onChat(AsyncPlayerChatEvent event) {
+        game.styleChat(event);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         game.playerJoined(event.getPlayer());
@@ -155,6 +164,6 @@ public final class RoundListener implements Listener {
     /** In case the close event slips past, the quit event drops the menu too. */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        game.menuClosed(event.getPlayer().getUniqueId());
+        game.playerQuit(event.getPlayer().getUniqueId());
     }
 }

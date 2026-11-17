@@ -13,6 +13,7 @@ import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.history.MatchRecord;
 import com.jifercraft.bingo.history.MatchSummary;
 import io.papermc.paper.advancement.AdvancementDisplay;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -66,6 +67,7 @@ public final class Game {
     private final File activeRoundFile;
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
+    private final TeamDisplay display;
     private final CardAdvancements cardAdvancements;
     private final OwnedAdvancements ownedAdvancements = new OwnedAdvancements();
     // True while advancements are handed back; see awardQuietly.
@@ -97,6 +99,7 @@ public final class Game {
         this.teamMenu = new TeamMenu(plugin, this, new NamespacedKey(plugin, "team-menu"));
         this.setupMenu = new SetupMenu(plugin, this, new NamespacedKey(plugin, "setup-menu"));
         this.hud = new Hud(plugin, this);
+        this.display = new TeamDisplay(plugin);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
         this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
         this.cardAdvancements = new CardAdvancements(plugin);
@@ -264,6 +267,7 @@ public final class Game {
         // which can take a moment: better during the countdown than on the
         // tick the round starts, and before any inventory is cleared.
         loadAdvancementTab();
+        display.applyAll(teams.all());
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -410,6 +414,7 @@ public final class Game {
             }
             giveCardItem(player);
             hud.playerJoined(player);
+            display.apply(player, target);
             cardAdvancements.sync(player, current, target);
             revokeOwnedAdvancements(player, target);
         }
@@ -461,6 +466,7 @@ public final class Game {
         teamMenu.refreshAll();
         if (round != null) {
             hud.playerLeft(player);
+            display.clear(player);
             removeCardItems(player);
             cardAdvancements.clear(player);
             Map<String, List<String>> owed = ownedAdvancements.take(player.getUniqueId());
@@ -733,6 +739,7 @@ public final class Game {
             }
             if (team != null) {
                 revokeOwnedAdvancements(player, team);
+                display.apply(player, team);
             }
         } else {
             restoreInventory(player);
@@ -821,10 +828,30 @@ public final class Game {
         }
         removeCardItemsFromAll();
         retireAdvancementTab();
+        display.clearAll();
         // Last, so whatever restoreInventories queued above reaches the disk.
         pendingRestores.close();
         round = null;
         roundConfig = null;
+    }
+
+    /** Chat of a team member during a round, off the main thread. */
+    public void styleChat(AsyncChatEvent event) {
+        display.styleChat(event);
+    }
+
+    /** After /bingo reload: names, order and chat format follow the new settings. */
+    public void settingsReloaded() {
+        display.clearAll();
+        if (round != null) {
+            display.applyAll(teams.all());
+        }
+    }
+
+    /** A player left the server. */
+    public void playerQuit(UUID playerId) {
+        menuClosed(playerId);
+        display.forget(playerId);
     }
 
     /** A player closed one of our menus; stop tracking it everywhere. */
@@ -957,6 +984,7 @@ public final class Game {
         restoreOwnedAdvancements();
         removeCardItemsFromAll();
         retireAdvancementTab();
+        display.clearAll();
         roundWriter.delete();
         roundRestoredUnfinished = false;
         round = null;
@@ -1017,6 +1045,7 @@ public final class Game {
             hud.restorePaused(restored.timeLimitSeconds());
             // The tab is not saved anywhere; the restart wiped it from the server.
             loadAdvancementTab();
+            display.applyAll(teams.all());
 
             messages().console("Found an unfinished round from the last session (seed <hl><seed></hl>),"
                     + " restored paused. Run <hl>/bingo resume</hl> when players are back.",

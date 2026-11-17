@@ -120,6 +120,15 @@ card-tab-description: "<body>La cartilla de tu equipo en esta ronda.<br><muted>S
 card-tab-cell-title: "<hl>#<number></hl> <white><item>"
 card-tab-cell-description: "<body><detail><br><muted>Fila <row>, columna <column>"
 card-tab-cell-item: "Tenlo en el inventario para marcarla."
+# Tab y chat de los jugadores con equipo mientras hay una ronda, si tab.enabled o
+# chat.enabled están activados en config.yml. <color> es el color del equipo,
+# <initial> la primera letra de su nombre y <team> el nombre con color. Deja vacío
+# el encabezado o el pie para no mostrarlo. chat-format tiene que llevar <message>,
+# o el chat no se toca.
+tab-format: "<color><initial> <player></color>"
+tab-header: "<brand><newline><muted>Equipo</muted> <team>"
+tab-footer: "<muted>jifercraft.com</muted>"
+chat-format: "<muted>[</muted><team><muted>]</muted> <color><player></color><muted> »</muted> <message>"
 
 # Match breakdown.
 breakdown:

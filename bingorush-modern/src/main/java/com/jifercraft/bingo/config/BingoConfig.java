@@ -54,6 +54,8 @@ public final class BingoConfig {
     private final ChatStyle deathChat;
     private final ChatStyle advancementChat;
     private final boolean advancementTab;
+    private final boolean tabEnabled;
+    private final boolean chatEnabled;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
     private final int teamSize;
@@ -74,7 +76,8 @@ public final class BingoConfig {
     private final int historyMaxSavedMatches;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives,
-            ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, long timeLimitSeconds,
+            ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, boolean tabEnabled, boolean chatEnabled,
+            long timeLimitSeconds,
             int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
@@ -88,6 +91,8 @@ public final class BingoConfig {
         this.deathChat = deathChat;
         this.advancementChat = advancementChat;
         this.advancementTab = advancementTab;
+        this.tabEnabled = tabEnabled;
+        this.chatEnabled = chatEnabled;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
         this.teamSize = teamSize;
@@ -140,6 +145,8 @@ public final class BingoConfig {
         ChatStyle deathChat = chatStyle(yaml, "round-chat.deaths", problems);
         ChatStyle advancementChat = chatStyle(yaml, "round-chat.advancements", problems);
         boolean advancementTab = yaml.getBoolean("advancement-tab", true);
+        boolean tabEnabled = yaml.getBoolean("tab.enabled", false);
+        boolean chatEnabled = yaml.getBoolean("chat.enabled", false);
 
         long timeLimit = yaml.getLong("time-limit", 1800);
         if (timeLimit < 0) {
@@ -339,7 +346,7 @@ public final class BingoConfig {
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, advancementTab, timeLimit, countdown, teamSize, clearInventories,
+        return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, advancementTab, tabEnabled, chatEnabled, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
                 historyEnabled, historyMaxSavedMatches);
@@ -366,6 +373,16 @@ public final class BingoConfig {
     /** Whether the round card shows up as a tab in the advancements screen. */
     public boolean advancementTab() {
         return advancementTab;
+    }
+
+    /** Team colors in the player list while a round runs. */
+    public boolean tabEnabled() {
+        return tabEnabled;
+    }
+
+    /** The team format for chat messages while a round runs. */
+    public boolean chatEnabled() {
+        return chatEnabled;
     }
 
     public ChatStyle deathChat() {
