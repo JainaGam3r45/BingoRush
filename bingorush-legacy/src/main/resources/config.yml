@@ -33,7 +33,8 @@ lives: 0
 # whole server during the round and puts it back afterwards.
 round-chat:
   deaths: custom
-  advancements: custom
+  # Off by default here, see above: "custom" and "hidden" change a game rule for everyone.
+  advancements: vanilla
 
 # Show the round card as its own tab in the advancements screen (L), with the
 # cells your team already has marked as done. Needs 1.12 or newer. On these
