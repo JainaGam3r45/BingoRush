@@ -234,6 +234,11 @@ public final class Game {
             messages().send(caller, "round-already-running");
             return;
         }
+        long activeTeams = teams.all().stream().filter(t -> !t.members().isEmpty()).count();
+        if (activeTeams < 2) {
+            messages().send(caller, "round-need-more-teams");
+            return;
+        }
         BingoConfig config = plugin.bingoConfig();
         if (config == null) {
             messages().send(caller, "round-config-broken");
