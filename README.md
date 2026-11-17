@@ -70,6 +70,43 @@ Files live in `plugins/BingoRush/`. New keys are added to existing files on star
 - `config.yml`: game mode, win mode, lockout, lives, time limit, teams, item and advancement pools, sounds, round chat, the advancements tab, update checks and history.
 - `lang/messages_<code>.yml`: everything players read, in MiniMessage, with the color palette at the top. English (`en`, the default) and Spanish (`es`) ship with the plugin; pick one with `language` in `config.yml`, or copy `messages_en.yml` to add your own. Missing keys fall back to English.
 
+### Settings reference
+
+| Key | Default | What it does | Legacy vs Modern differences |
+| :-- | :-- | :-- | :-- |
+| `language` | `en` | Language file to load from `lang/messages_<code>.yml`. | None. |
+| `game-mode` | `ITEMS` | Default round mode: `ITEMS` or `ADVANCEMENTS`. | Advancements need 1.12+ on Legacy. |
+| `win-mode` | `LINE` | Win condition: `LINE` (row, column, diagonal) or `FULL_CARD`. | None. |
+| `lockout` | `false` | When true, each cell is claimed by only one team. | None. |
+| `time-limit-seconds` | `1800` | Round time limit in seconds. 0 disables the timer. | None. |
+| `countdown-seconds` | `10` | Seconds for the start countdown. 0 starts immediately. | None. |
+| `clear-inventories` | `true` | Empties inventories during the round and restores them after. | None. |
+| `scatter-radius` | `100` | Block radius around world spawn to scatter teams at round start. | None. |
+| `late-join` | `JOIN` | What to do with players connecting mid-round: `JOIN` or `SPECTATE`. | None. |
+| `lives` | `0` | Lives per player before knockout. 0 means unlimited, 1 is hardcore. | None. |
+| `round-chat.deaths` | `custom` | Death message format: `custom`, `vanilla`, or `hidden`. | None. |
+| `round-chat.advancements` | `custom` (Modern) / `vanilla` (Legacy) | Advancement message format: `custom`, `vanilla`, or `hidden`. | Defaults to `vanilla` on Legacy (see limits below). |
+| `advancement-tab` | `true` (Modern) / `false` (Legacy) | Shows the round card as a tab in the advancements screen (L). | Starts off on Legacy due to reload cost on 1.12+. |
+| `tab.enabled` | `false` | Colors player names by team in the player list. | Modern also groups tab by team. |
+| `tab.header` | `true` | Custom header for the player list. | None. |
+| `tab.footer` | `true` | Custom footer for the player list. | None. |
+| `chat.enabled` | `false` | Formats in-game chat with team colors and prefixes. | None. |
+| `update-notifier.enabled` | `true` | Checks GitHub releases for newer versions. | None. |
+| `update-notifier.on-join` | `true` | Alerts admins with permission on server join. | None. |
+| `update-notifier.check-interval-hours` | `24` | Hours between automatic background checks. 0 disables. | None. |
+| `history.enabled` | `true` | Saves match summaries to `data/matches/` as JSON. | None. |
+| `history.max-saved-matches` | `50` | Maximum match records to retain on disk. | None. |
+
+## Known limits on Legacy
+
+- **Scoreboard length**: on Minecraft versions before 1.18, scoreboard lines cannot exceed 40 characters. Longer team names or values are clamped to avoid client crashes.
+- **Player list grouping**: Spigot before Paper 26.x lacks native tab list order control. Team members are colored in the tab, but not grouped together.
+- **Advancement chat rule**: Spigot lacks per-player advancement message filtering. Setting `round-chat.advancements` to anything other than `vanilla` toggles the global `announceAdvancements` gamerule for the whole server while the round is running.
+
+## Notes and verification status
+
+- The sorting direction in Modern's `setPlayerListOrder` has not been visually verified with multiple client versions.
+
 ## Third-party notices
 
 The Legacy jar bundles Adventure, Adventure Platform, Examination and Option (by KyoriPowered) and XSeries (by Crypto Morin), all under the MIT License and moved to the package `com.jifercraft.bingo.lib`. Their license texts are inside the jar under `META-INF/licenses/`, listed in `META-INF/THIRD-PARTY-NOTICES.txt`. The Modern jar bundles nothing from outside.
