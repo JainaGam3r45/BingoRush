@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.jifercraft"
-version = "0.1.0"
+version = "0.2.0-pre.2"
 description = "Bingo minigame for live events on Paper"
 
 repositories {
