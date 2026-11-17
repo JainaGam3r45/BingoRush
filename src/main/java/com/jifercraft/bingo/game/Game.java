@@ -70,6 +70,9 @@ public final class Game {
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     // Game mode each knocked out player had before turning spectator.
     private final Map<UUID, GameMode> savedGameModes = new HashMap<>();
+    // Names seen while players were online, so the match record never has to
+    // look up an offline player, which can mean reading their file from disk.
+    private final Map<UUID, String> knownNames = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
     private BukkitTask sweepTask;
@@ -381,6 +384,7 @@ public final class Game {
             return;
         }
         target.add(player.getUniqueId());
+        knownNames.put(player.getUniqueId(), player.getName());
         messages().send(player, "team-joined", teamPlaceholder(target));
         teamMenu.refreshAll();
         if (current != null) {
@@ -523,6 +527,7 @@ public final class Game {
             old.remove(target.getUniqueId());
         }
         team.add(target.getUniqueId());
+        knownNames.put(target.getUniqueId(), target.getName());
         teamMenu.refreshAll();
         messages().send(caller, "team-assigned",
                 Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
@@ -633,6 +638,7 @@ public final class Game {
      * to players without an active round.
      */
     public void playerJoined(Player player) {
+        knownNames.put(player.getUniqueId(), player.getName());
         if (roundRestoredUnfinished && player.hasPermission("bingo.admin")) {
             messages().send(player, "round-restored-admin");
         }
@@ -1716,12 +1722,7 @@ public final class Game {
         List<String> names = new ArrayList<>();
         for (UUID uuid : team.members()) {
             Player online = Bukkit.getPlayer(uuid);
-            if (online != null) {
-                names.add(online.getName());
-            } else {
-                String name = Bukkit.getOfflinePlayer(uuid).getName();
-                names.add(name != null ? name : uuid.toString());
-            }
+            names.add(online != null ? online.getName() : knownNames.getOrDefault(uuid, uuid.toString()));
         }
         return names;
     }
