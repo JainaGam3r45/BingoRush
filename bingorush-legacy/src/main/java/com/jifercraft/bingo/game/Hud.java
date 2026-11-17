@@ -230,6 +230,9 @@ public final class Hud {
         lines.add(Component.empty());
         lines.add(messages().render("sidebar-teams-header"));
         for (Team team : game.teams().all()) {
+            if (team.members().isEmpty()) {
+                continue;
+            }
             lines.add(messages().render("sidebar-team-entry",
                     TagResolver.resolver("color", Tag.styling(team.color())),
                     Game.teamPlaceholder(team),

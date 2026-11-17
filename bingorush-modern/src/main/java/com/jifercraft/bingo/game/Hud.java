@@ -249,6 +249,9 @@ public final class Hud {
         lines.add(new SidebarLine("blank1", Component.empty()));
         lines.add(new SidebarLine("teams_header", plugin.messages().render("sidebar-teams-header")));
         for (Team team : game.teams().all()) {
+            if (team.members().isEmpty()) {
+                continue;
+            }
             lines.add(new SidebarLine("team-" + team.id(), plugin.messages().render("sidebar-team-entry",
                     TagResolver.resolver("color", Tag.styling(team.color())),
                     Game.teamPlaceholder(team),
