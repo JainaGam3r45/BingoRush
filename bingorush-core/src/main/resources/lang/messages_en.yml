@@ -258,7 +258,7 @@ bossbar-title: "<brand> <hl><time></hl> <body>left"
 # Updates.
 version-info: "<brand> <body>Version: <hl>v<current></hl>"
 update-checking: "<prefix><body>Checking GitHub for updates..."
-update-available: "<prefix><body>A new version is out: <ok>v<latest></ok> <body>(you have <muted>v<current></muted>). Download it at <hl><click:open_url:'<url>'><url></click></hl>"
+update-available: "<prefix><body>A new version is out: <ok>v<latest></ok> <body>(you have <muted>v<current></muted>). Download it at <hl><click:open_url:'<link>'><url></click></hl>"
 update-up-to-date: "<prefix><body>BingoRush is up to date (<ok>v<current></ok>)."
 update-rate-limited: "<prefix><err>GitHub's rate limit was hit. Try again later."
 update-not-found: "<prefix><muted>No releases have been published yet.</muted>"

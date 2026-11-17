@@ -292,7 +292,8 @@ public final class UpdateChecker implements Listener {
         plugin.messages().send(target, "update-available",
                 Placeholder.unparsed("latest", latestVersion.clean()),
                 Placeholder.unparsed("current", currentVersion.clean()),
-                Placeholder.unparsed("url", downloadUrl));
+                Placeholder.unparsed("url", downloadUrl),
+                Placeholder.parsed("link", clickableLink(downloadUrl)));
     }
 
     public boolean isUpdateAvailable() {
@@ -301,6 +302,13 @@ public final class UpdateChecker implements Listener {
 
     public Version latestVersion() {
         return latestVersion;
+    }
+
+    // The click target is parsed as part of the tag, so it must be a plain
+    // GitHub link: a tag name can contain "<", and an odd one gets the
+    // generic releases page instead of a way into the message.
+    static String clickableLink(String url) {
+        return url.matches("https://github\\.com/[A-Za-z0-9._/-]+") ? url : RELEASES_URL;
     }
 
     public Version currentVersion() {

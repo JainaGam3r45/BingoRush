@@ -33,4 +33,15 @@ class UpdateCheckerTest {
 
         assertEquals(UpdateChecker.CheckResult.NOT_FOUND, checker.handleTagsJson("[]"));
     }
+
+    @Test
+    void onlyAPlainGithubLinkBecomesAClickTarget() {
+        String tag = "https://github.com/JainaGam3r45/BingoRush/releases/tag/v0.2.0-pre.3";
+        assertEquals(tag, UpdateChecker.clickableLink(tag));
+
+        String releases = "https://github.com/JainaGam3r45/BingoRush/releases";
+        // A tag name can hold "<" and quotes; those never reach the message as tags.
+        assertEquals(releases, UpdateChecker.clickableLink(releases + "/tag/v1<click:run_command:'/op x'>"));
+        assertEquals(releases, UpdateChecker.clickableLink("https://example.invalid/x"));
+    }
 }
