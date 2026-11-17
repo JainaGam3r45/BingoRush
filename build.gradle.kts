@@ -1,58 +1,21 @@
 plugins {
-    java
-    id("xyz.jpenilla.run-paper") version "3.1.0"
+    base
+    id("com.gradleup.shadow") version "9.6.1" apply false
+    id("xyz.jpenilla.run-paper") version "3.1.0" apply false
 }
 
-group = "com.jifercraft"
-version = "0.2.0-pre.2"
-description = "Bingo minigame for live events on Paper"
-
-repositories {
-    maven("https://repo.papermc.io/repository/maven-public/")
-    mavenCentral()
+allprojects {
+    group = "com.jifercraft"
+    version = "0.2.0-pre.2"
 }
 
-dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.3.build.253-stable")
-    testImplementation("io.papermc.paper:paper-api:26.3.build.253-stable")
-
-    testImplementation(platform("org.junit:junit-bom:6.1.3"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+// Every server jar lands in the root build/libs, next to each other.
+val copyJars = tasks.register<Copy>("copyJars") {
+    from(project(":bingorush-modern").tasks.named("shadowJar"))
+    into(layout.buildDirectory.dir("libs"))
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
-}
-
-tasks.compileJava {
-    // No complete JDK 25 on this machine, so build on the JDK 27 javac and
-    // just emit Java 25 bytecode. Switch to a toolchain once a real JDK 25 is installed.
-    options.release = 25
-    options.encoding = "UTF-8"
-    options.compilerArgs.add("-Xlint:deprecation")
-}
-
-tasks.processResources {
-    filteringCharset = "UTF-8"
-    val expanded = mapOf(
-        "name" to rootProject.name,
-        "version" to project.version.toString(),
-    )
-    filesMatching("plugin.yml") {
-        expand(expanded)
-    }
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-
-tasks.jar {
-    archiveBaseName = rootProject.name
-}
-
-tasks.runServer {
-    minecraftVersion("26.3")
+tasks.named("assemble") {
+    dependsOn(project(":bingorush-modern").tasks.named("shadowJar"))
+    finalizedBy(copyJars)
 }
