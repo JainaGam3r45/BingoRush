@@ -27,7 +27,10 @@ lives: 0
 
 # What chat shows when a player in a round dies or gets an advancement.
 # "custom" uses the templates in the language file, "vanilla" keeps Minecraft's
-# own line and "hidden" removes it. Players outside the round are left alone.
+# own line and "hidden" removes it. Death lines of players outside the round
+# are left alone. Spigot cannot change a vanilla advancement line, so on this
+# jar anything but "vanilla" turns the announceAdvancements rule off for the
+# whole server during the round and puts it back afterwards.
 round-chat:
   deaths: custom
   advancements: custom
