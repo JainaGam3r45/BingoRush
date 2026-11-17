@@ -57,6 +57,7 @@ public final class Game {
     private final NamespacedKey cardItemTag;
     private final Hud hud;
     private final File activeRoundFile;
+    private final ActiveRoundWriter roundWriter;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
@@ -80,6 +81,7 @@ public final class Game {
         this.setupMenu = new SetupMenu(plugin, this, new NamespacedKey(plugin, "setup-menu"));
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
+        this.roundWriter = new ActiveRoundWriter(activeRoundFile, plugin.getLogger());
     }
 
     public Round round() {
@@ -650,8 +652,15 @@ public final class Game {
 
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
+        // Drain the queue first, then write the last snapshot here: nothing
+        // async can be scheduled once the plugin is disabling.
+        roundWriter.close();
         if (round != null) {
-            saveActiveRound();
+            try {
+                RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories);
+            } catch (RuntimeException e) {
+                plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
+            }
         }
         cancelTasks();
         cardMenu.closeAll();
@@ -782,7 +791,7 @@ public final class Game {
         hud.hideAll();
         restoreInventories();
         removeCardItemsFromAll();
-        RoundStorage.delete(activeRoundFile);
+        roundWriter.delete();
         roundRestoredUnfinished = false;
         round = null;
         roundConfig = null;
@@ -812,12 +821,14 @@ public final class Game {
         if (round == null) {
             return;
         }
-        long limit = roundTimeLimit;
+        String json;
         try {
-            RoundStorage.save(activeRoundFile, round, limit, savedInventories);
-        } catch (Exception e) {
+            json = RoundStorage.toJson(round, roundTimeLimit, savedInventories);
+        } catch (RuntimeException e) {
             plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
+            return;
         }
+        roundWriter.write(json);
     }
 
     public void loadSavedRoundIfPresent() {

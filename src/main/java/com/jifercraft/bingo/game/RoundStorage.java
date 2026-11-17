@@ -66,11 +66,15 @@ public final class RoundStorage {
     }
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories) {
-        File parent = file.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
-        }
+        write(file, toJson(round, timeLimitSeconds, savedInventories));
+    }
 
+    /**
+     * Snapshots the round as JSON. It reads live round state and serializes
+     * item stacks, so call it on the main thread; {@link #write} can then run
+     * anywhere.
+     */
+    public static String toJson(Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories) {
         Map<String, String> encodedInventories = new HashMap<>();
         if (savedInventories != null) {
             for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
@@ -101,7 +105,14 @@ public final class RoundStorage {
                 encodedInventories
         );
 
-        String json = GSON.toJson(data);
+        return GSON.toJson(data);
+    }
+
+    public static void write(File file, String json) {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
         File tmpFile = new File(parent, file.getName() + ".tmp");
         try {
             Files.writeString(tmpFile.toPath(), json, StandardCharsets.UTF_8);
