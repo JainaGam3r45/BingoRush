@@ -108,6 +108,13 @@ public final class BingoCommand {
                 .build();
     }
 
+    public LiteralCommandNode<CommandSourceStack> buildCardAlias(String alias) {
+        return Commands.literal(alias)
+                .requires(this::isPlayerAllowed)
+                .executes(ctx -> runForPlayer(ctx, game::openCard))
+                .build();
+    }
+
     private boolean isAdmin(CommandSourceStack source) {
         return source.getSender().hasPermission("bingo.admin");
     }

@@ -66,15 +66,17 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
-        if ((action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK)
-                || event.getHand() != EquipmentSlot.HAND) {
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
         if (!game.isCardItem(event.getItem())) {
             return;
         }
         event.setCancelled(true);
-        game.openCard(event.getPlayer());
+        // Avoid double-opening when holding the item in one hand and clicking with both
+        if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
+            game.openCard(event.getPlayer());
+        }
     }
 
     /** The card item cannot be moved into chests or around the inventory. */
