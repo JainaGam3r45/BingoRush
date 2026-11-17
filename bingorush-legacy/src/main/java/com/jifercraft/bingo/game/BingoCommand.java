@@ -29,7 +29,7 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
             "history", "export", "reload");
     private static final List<String> PLAYER_SUBCOMMANDS = Arrays.asList(
-            "help", "version", "join", "leave", "coords", "card", "teams");
+            "help", "version", "join", "leave", "coords", "c", "card", "teams");
     private static final List<String> ADMIN_SUBCOMMANDS = Arrays.asList(
             "start", "setup", "stop", "pause", "resume", "reroll", "reload", "history", "export");
 
