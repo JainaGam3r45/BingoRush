@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,9 @@ public final class RoundStorage {
     public record FirstClaimRecord(int cell, int teamId, long elapsedMs) {
     }
 
+    public record SavedMember(String team, int teamId) {
+    }
+
     public record SavedRoundData(
             long seed,
             String mode,
@@ -54,7 +58,8 @@ public final class RoundStorage {
             int lives,
             Map<String, Integer> deaths,
             Map<String, String> savedGameModes,
-            Map<String, Map<String, List<String>>> revokedAdvancements
+            Map<String, Map<String, List<String>>> revokedAdvancements,
+            Map<String, SavedMember> members
     ) {
     }
 
@@ -64,7 +69,8 @@ public final class RoundStorage {
             Map<UUID, ItemStack[]> savedInventories,
             Round.State originalState,
             Map<UUID, GameMode> savedGameModes,
-            Map<UUID, Map<String, List<String>>> revokedAdvancements
+            Map<UUID, Map<String, List<String>>> revokedAdvancements,
+            List<TeamMembership.Member> members
     ) {
     }
 
@@ -76,17 +82,23 @@ public final class RoundStorage {
     }
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories) {
-        save(file, round, timeLimitSeconds, savedInventories, Map.of());
+        save(file, round, timeLimitSeconds, savedInventories, Map.of(), Map.of(), List.of());
     }
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
             Map<UUID, GameMode> savedGameModes) {
-        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes, Map.of()));
+        save(file, round, timeLimitSeconds, savedInventories, savedGameModes, Map.of(), List.of());
     }
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
             Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements) {
-        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes, revokedAdvancements));
+        save(file, round, timeLimitSeconds, savedInventories, savedGameModes, revokedAdvancements, List.of());
+    }
+
+    public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
+            Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements,
+            List<TeamMembership.Member> members) {
+        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes, revokedAdvancements, members));
     }
 
     /**
@@ -95,11 +107,16 @@ public final class RoundStorage {
      * anywhere.
      */
     public static String toJson(Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
-            Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements) {
+            Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements,
+            List<TeamMembership.Member> members) {
         Map<String, Integer> deaths = new HashMap<>();
         round.deaths().forEach((id, count) -> deaths.put(id.toString(), count));
         Map<String, String> gameModes = new HashMap<>();
         savedGameModes.forEach((id, mode) -> gameModes.put(id.toString(), mode.name()));
+        Map<String, SavedMember> savedMembers = new HashMap<>();
+        for (TeamMembership.Member member : members) {
+            savedMembers.put(member.playerId().toString(), new SavedMember(member.teamName(), member.teamId()));
+        }
 
         Map<String, String> encodedInventories = new HashMap<>();
         if (savedInventories != null) {
@@ -132,7 +149,8 @@ public final class RoundStorage {
                 round.lives(),
                 deaths,
                 gameModes,
-                revokedAdvancements
+                revokedAdvancements,
+                savedMembers
         );
 
         return GSON.toJson(data);
@@ -204,7 +222,20 @@ public final class RoundStorage {
                     }
                 });
             }
-            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState, gameModes, revoked);
+            List<TeamMembership.Member> members = new ArrayList<>();
+            if (data.members() != null) {
+                data.members().forEach((id, saved) -> {
+                    if (saved == null || saved.team() == null) {
+                        return;
+                    }
+                    try {
+                        members.add(new TeamMembership.Member(UUID.fromString(id), saved.team(), saved.teamId()));
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                });
+            }
+            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState, gameModes, revoked,
+                    members);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load round state from " + file.getPath(), e);
         }

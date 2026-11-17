@@ -302,7 +302,68 @@ class RoundStorageTest {
         assertEquals(0, restored.round().lives());
         assertFalse(restored.round().isEliminated(UUID.randomUUID()));
         assertTrue(restored.savedGameModes().isEmpty());
+        assertTrue(restored.members().isEmpty());
         assertEquals(Round.State.RUNNING, restored.originalState());
+    }
+
+    @Test
+    void loadsAFileFromBeforeTeamMembership(@TempDir Path tempDir) throws Exception {
+        // Shape of active-round.json as 0.2.0-pre.3 wrote it, without members.
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "\"minecraft:item_" + i + "\"").toList();
+        UUID player = UUID.randomUUID();
+        String json = """
+                {
+                  "seed": 10,
+                  "mode": "ITEMS",
+                  "winMode": "FULL_CARD",
+                  "lockout": false,
+                  "state": "RUNNING",
+                  "elapsedMs": 12000,
+                  "timeLimitSeconds": 900,
+                  "items": [%s],
+                  "claims": [],
+                  "firstClaim": null,
+                  "savedInventories": {},
+                  "lives": 3,
+                  "deaths": {"%s": 1},
+                  "savedGameModes": {"%s": "SURVIVAL"},
+                  "revokedAdvancements": {}
+                }
+                """.formatted(String.join(",", items), player, player);
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+        Files.writeString(saveFile.toPath(), json);
+
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        assertTrue(restored.members().isEmpty());
+        assertEquals(3, restored.round().lives());
+        assertEquals(1, restored.round().deaths().get(player));
+        assertEquals(GameMode.SURVIVAL, restored.savedGameModes().get(player));
+    }
+
+    @Test
+    void teamMembershipSurvivesARestart(@TempDir Path tempDir) {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "minecraft:item_" + i).toList();
+        Round round = new Round(11L, new BingoCard(11L, items), new ClaimBoard(WinMode.LINE));
+        UUID ana = UUID.randomUUID();
+        UUID ben = UUID.randomUUID();
+        List<TeamMembership.Member> members = List.of(
+                new TeamMembership.Member(ana, "Red", 0),
+                new TeamMembership.Member(ben, "Blue", 1));
+
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+        RoundStorage.save(saveFile, round, 0L, Map.of(), Map.of(), Map.of(), members);
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        Map<UUID, TeamMembership.Member> byPlayer = new HashMap<>();
+        for (TeamMembership.Member member : restored.members()) {
+            byPlayer.put(member.playerId(), member);
+        }
+        assertEquals(2, byPlayer.size());
+        assertEquals("Red", byPlayer.get(ana).teamName());
+        assertEquals(0, byPlayer.get(ana).teamId());
+        assertEquals("Blue", byPlayer.get(ben).teamName());
+        assertEquals(1, byPlayer.get(ben).teamId());
     }
 
     @Test
