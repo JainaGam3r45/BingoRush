@@ -26,7 +26,7 @@ public final class BingoCommand {
 
     private static final List<String> PLAYER_HELP = List.of("join", "card", "leave", "coords", "version");
     private static final List<String> ADMIN_HELP = List.of(
-            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams", "reload");
+            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams", "history", "export", "reload");
 
     private final BingoRush plugin;
     private final Game game;
@@ -130,6 +130,24 @@ public final class BingoCommand {
                                                 }))))
                         .then(Commands.literal("clear")
                                 .executes(ctx -> run(ctx, game::clearTeams))))
+                .then(Commands.literal("history")
+                        .requires(this::isAdmin)
+                        .executes(ctx -> run(ctx, sender -> game.showHistory(sender, 1)))
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> run(ctx, sender -> {
+                                    plugin.matchHistory().clearHistory();
+                                    plugin.messages().send(sender, "history.cleared");
+                                })))
+                        .then(Commands.argument("query", StringArgumentType.string())
+                                .suggests(this::suggestHistory)
+                                .executes(ctx -> run(ctx, sender ->
+                                        game.showHistoryOrDetails(sender, StringArgumentType.getString(ctx, "query"))))))
+                .then(Commands.literal("export")
+                        .requires(this::isAdmin)
+                        .then(Commands.argument("id", StringArgumentType.string())
+                                .suggests(this::suggestMatchIds)
+                                .executes(ctx -> run(ctx, sender ->
+                                        game.exportMatch(sender, StringArgumentType.getString(ctx, "id"))))))
                 .build();
     }
 
@@ -239,6 +257,36 @@ public final class BingoCommand {
         for (String option : List.of("lockout:true", "lockout:false", "true", "false")) {
             if (option.startsWith(remaining)) {
                 builder.suggest(option);
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestMatchIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        String remaining = builder.getRemainingLowerCase();
+        for (var summary : plugin.matchHistory().summaries()) {
+            if (summary.id().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
+                builder.suggest(summary.id());
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestHistory(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        String remaining = builder.getRemainingLowerCase();
+        if ("clear".startsWith(remaining)) {
+            builder.suggest("clear");
+        }
+        int totalPages = plugin.matchHistory().totalPages(5);
+        for (int p = 1; p <= Math.min(totalPages, 5); p++) {
+            String str = String.valueOf(p);
+            if (str.startsWith(remaining)) {
+                builder.suggest(str);
+            }
+        }
+        for (var summary : plugin.matchHistory().summaries()) {
+            if (summary.id().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
+                builder.suggest(summary.id());
             }
         }
         return builder.buildFuture();

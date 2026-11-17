@@ -7,6 +7,7 @@ import com.jifercraft.bingo.game.BingoCommand;
 import com.jifercraft.bingo.game.Game;
 import com.jifercraft.bingo.game.RoundListener;
 import com.jifercraft.bingo.game.Teams;
+import com.jifercraft.bingo.history.MatchHistory;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
@@ -19,6 +20,7 @@ public final class BingoRush extends JavaPlugin {
     private Teams teams;
     private Game game;
     private UpdateChecker updateChecker;
+    private MatchHistory matchHistory;
 
     @Override
     public void onEnable() {
@@ -34,6 +36,8 @@ public final class BingoRush extends JavaPlugin {
         if (bingoConfig != null) {
             teams.reset(bingoConfig.teamDefinitions());
         }
+        File matchesDir = new File(getDataFolder(), "data/matches");
+        matchHistory = new MatchHistory(matchesDir, this);
         game = new Game(this, teams);
         game.loadSavedRoundIfPresent();
         getServer().getPluginManager().registerEvents(new RoundListener(game), this);
@@ -75,6 +79,10 @@ public final class BingoRush extends JavaPlugin {
 
     public UpdateChecker updateChecker() {
         return updateChecker;
+    }
+
+    public MatchHistory matchHistory() {
+        return matchHistory;
     }
 
     /**

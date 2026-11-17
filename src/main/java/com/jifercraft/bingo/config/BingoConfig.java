@@ -64,13 +64,15 @@ public final class BingoConfig {
     private final boolean updateNotifierEnabled;
     private final boolean updateNotifierOnJoin;
     private final int updateCheckIntervalHours;
+    private final boolean historyEnabled;
+    private final int historyMaxSavedMatches;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
             Map<String, Advancement> advancementsByKey, Map<SoundId, Key> sounds,
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin,
-            int updateCheckIntervalHours) {
+            int updateCheckIntervalHours, boolean historyEnabled, int historyMaxSavedMatches) {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
@@ -90,6 +92,8 @@ public final class BingoConfig {
         this.updateNotifierEnabled = updateNotifierEnabled;
         this.updateNotifierOnJoin = updateNotifierOnJoin;
         this.updateCheckIntervalHours = updateCheckIntervalHours;
+        this.historyEnabled = historyEnabled;
+        this.historyMaxSavedMatches = historyMaxSavedMatches;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -298,12 +302,19 @@ public final class BingoConfig {
         boolean updateNotifierOnJoin = yaml.getBoolean("update-notifier.on-join", true);
         int updateCheckIntervalHours = yaml.getInt("update-notifier.check-interval-hours", 24);
 
+        boolean historyEnabled = yaml.getBoolean("history.enabled", true);
+        int historyMaxSavedMatches = yaml.getInt("history.max-saved-matches", 50);
+        if (historyMaxSavedMatches < 0) {
+            problems.add("history.max-saved-matches must be 0 or greater");
+        }
+
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
         return new BingoConfig(gameMode, winMode, lockout, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
-                teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours);
+                teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
+                historyEnabled, historyMaxSavedMatches);
     }
 
     public BingoGameMode gameMode() {
@@ -392,5 +403,13 @@ public final class BingoConfig {
 
     public int updateCheckIntervalHours() {
         return updateCheckIntervalHours;
+    }
+
+    public boolean historyEnabled() {
+        return historyEnabled;
+    }
+
+    public int historyMaxSavedMatches() {
+        return historyMaxSavedMatches;
     }
 }

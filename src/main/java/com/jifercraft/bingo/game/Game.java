@@ -8,8 +8,11 @@ import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
+import com.jifercraft.bingo.history.MatchRecord;
+import com.jifercraft.bingo.history.MatchSummary;
 import java.io.File;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -706,6 +709,7 @@ public final class Game {
             plugin.getLogger().info("Round timed out, winner: " + winner.name() + ", seed " + current.seed());
         }
         broadcastBreakdown(current);
+        recordMatchResult(current, winner, "TIMEOUT");
         hud.timeUp();
         endRound();
     }
@@ -960,6 +964,7 @@ public final class Game {
         broadcast("round-won-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
         plugin.getLogger().info("Round won by " + winner.name() + " in " + time + ", seed " + current.seed());
         broadcastBreakdown(current);
+        recordMatchResult(current, winner, "COMPLETION");
         hud.won(winner);
         endRound();
     }
@@ -1085,6 +1090,271 @@ public final class Game {
 
     static TagResolver teamPlaceholder(Team team) {
         return Placeholder.component("team", Component.text(team.name(), team.color()));
+    }
+
+    public void showHistoryOrDetails(CommandSender sender, String query) {
+        if (query == null || query.isBlank()) {
+            showHistory(sender, 1);
+            return;
+        }
+        if (plugin.matchHistory().summary(query) != null) {
+            showMatchDetails(sender, query);
+            return;
+        }
+        try {
+            int page = Integer.parseInt(query);
+            showHistory(sender, page);
+            return;
+        } catch (NumberFormatException ignored) {
+        }
+        showMatchDetails(sender, query);
+    }
+
+    public void showHistory(CommandSender sender, int page) {
+        BingoConfig config = plugin.bingoConfig();
+        if (config != null && !config.historyEnabled()) {
+            messages().send(sender, "history.disabled");
+            return;
+        }
+        var history = plugin.matchHistory();
+        if (history.summaries().isEmpty()) {
+            messages().send(sender, "history.empty");
+            return;
+        }
+
+        int pageSize = 5;
+        int totalPages = history.totalPages(pageSize);
+        if (page < 1 || page > totalPages) {
+            messages().send(sender, "history.invalid-page",
+                    Placeholder.unparsed("total", String.valueOf(totalPages)));
+            return;
+        }
+
+        messages().send(sender, "history.header",
+                Placeholder.unparsed("page", String.valueOf(page)),
+                Placeholder.unparsed("total", String.valueOf(totalPages)));
+
+        for (MatchSummary summary : history.page(page, pageSize)) {
+            TextColor color = TextColor.fromHexString(summary.winnerColor());
+            Component winnerComp = Component.text(summary.winnerName(), color != null ? color : TextColor.color(0xFFFFFF));
+            Component viewBtn = messages().render("history.view-button")
+                    .hoverEvent(messages().render("history.view-hover", Placeholder.unparsed("id", summary.id())))
+                    .clickEvent(ClickEvent.runCommand("/bingo history " + summary.id()));
+
+            messages().send(sender, "history.entry",
+                    Placeholder.unparsed("id", summary.id()),
+                    Placeholder.unparsed("date", summary.date()),
+                    Placeholder.component("winner", winnerComp),
+                    Placeholder.unparsed("time", summary.duration()),
+                    Placeholder.component("view", viewBtn));
+        }
+
+        if (totalPages > 1) {
+            Component prevComp = page > 1
+                    ? messages().render("history.prev-button")
+                            .hoverEvent(messages().render("history.prev-hover", Placeholder.unparsed("page", String.valueOf(page - 1))))
+                            .clickEvent(ClickEvent.runCommand("/bingo history " + (page - 1)))
+                    : Component.empty();
+
+            Component nextComp = page < totalPages
+                    ? messages().render("history.next-button")
+                            .hoverEvent(messages().render("history.next-hover", Placeholder.unparsed("page", String.valueOf(page + 1))))
+                            .clickEvent(ClickEvent.runCommand("/bingo history " + (page + 1)))
+                    : Component.empty();
+
+            messages().send(sender, "history.pagination",
+                    Placeholder.component("prev", prevComp),
+                    Placeholder.component("next", nextComp));
+        }
+    }
+
+    public void showMatchDetails(CommandSender sender, String id) {
+        BingoConfig config = plugin.bingoConfig();
+        if (config != null && !config.historyEnabled()) {
+            messages().send(sender, "history.disabled");
+            return;
+        }
+        MatchRecord record = plugin.matchHistory().loadMatch(id);
+        if (record == null) {
+            messages().send(sender, "history.not-found", Placeholder.unparsed("id", id));
+            return;
+        }
+
+        messages().send(sender, "history.detail-header", Placeholder.unparsed("id", record.id()));
+        messages().send(sender, "history.detail-date", Placeholder.unparsed("date", record.date()));
+        messages().send(sender, "history.detail-mode",
+                Placeholder.unparsed("mode", record.gameMode().toLowerCase(Locale.ROOT)),
+                Placeholder.unparsed("win_mode", record.winMode()),
+                Placeholder.unparsed("lockout", record.lockout() ? " | Lockout" : ""));
+        messages().send(sender, "history.detail-duration", Placeholder.unparsed("time", record.durationFormatted()));
+        messages().send(sender, "history.detail-seed", Placeholder.unparsed("seed", String.valueOf(record.seed())));
+
+        if (record.winner() != null) {
+            TextColor color = TextColor.fromHexString(record.winner().color());
+            Component winnerComp = Component.text(record.winner().name(), color != null ? color : TextColor.color(0xFFFFFF));
+            messages().send(sender, "history.detail-winner",
+                    Placeholder.component("winner", winnerComp),
+                    Placeholder.unparsed("count", String.valueOf(record.winner().claims())));
+        } else {
+            messages().send(sender, "history.detail-winner-none");
+        }
+
+        if (record.ranking() != null && !record.ranking().isEmpty()) {
+            messages().send(sender, "history.detail-ranking-header");
+            int pos = 1;
+            for (MatchRecord.TeamResult team : record.ranking()) {
+                TextColor color = TextColor.fromHexString(team.color());
+                Component teamComp = Component.text(team.name(), color != null ? color : TextColor.color(0xFFFFFF));
+                messages().send(sender, "history.detail-ranking-entry",
+                        Placeholder.unparsed("pos", String.valueOf(pos)),
+                        Placeholder.component("team", teamComp),
+                        Placeholder.unparsed("count", String.valueOf(team.claims())));
+                pos++;
+            }
+        }
+
+        if (record.firstClaim() != null) {
+            MatchRecord.FirstClaim first = record.firstClaim();
+            TagResolver itemTag;
+            if ("ADVANCEMENTS".equalsIgnoreCase(record.gameMode())) {
+                NamespacedKey key = NamespacedKey.fromString(first.item());
+                Advancement adv = key != null ? Bukkit.getAdvancement(key) : null;
+                Component title = adv != null && adv.getDisplay() != null
+                        ? adv.getDisplay().title()
+                        : Component.text(first.item());
+                itemTag = Placeholder.component("item", title);
+            } else {
+                ItemType type = roundConfig != null ? roundConfig.itemType(first.item()) : null;
+                itemTag = Placeholder.component("item", type != null ? Component.translatable(type) : Component.text(first.item()));
+            }
+            messages().send(sender, "history.detail-first-claim",
+                    itemTag,
+                    Placeholder.unparsed("team", first.teamName()),
+                    Placeholder.unparsed("time", first.timeFormatted()));
+        } else {
+            messages().send(sender, "history.detail-first-claim-none");
+        }
+
+        messages().send(sender, "history.detail-export-hint",
+                Placeholder.unparsed("file", record.id() + ".json"));
+    }
+
+    public void exportMatch(CommandSender sender, String id) {
+        BingoConfig config = plugin.bingoConfig();
+        if (config != null && !config.historyEnabled()) {
+            messages().send(sender, "history.disabled");
+            return;
+        }
+        File file = new File(plugin.matchHistory().directory(), id + ".json");
+        if (!file.exists()) {
+            messages().send(sender, "history.not-found", Placeholder.unparsed("id", id));
+            return;
+        }
+        messages().send(sender, "history.exported",
+                Placeholder.unparsed("id", id),
+                Placeholder.unparsed("file", id + ".json"));
+    }
+
+    private void recordMatchResult(Round current, Team winner, String reason) {
+        BingoConfig config = plugin.bingoConfig();
+        if (config != null && !config.historyEnabled()) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        String id = MatchRecord.generateId(now);
+        String date = MatchRecord.formatDate(now);
+
+        List<Team> participants = teams.all().stream()
+                .filter(t -> t.size() > 0 || current.board().count(t.id()) > 0)
+                .toList();
+        if (participants.isEmpty()) {
+            participants = teams.all();
+        }
+
+        List<Team> ranked = participants.stream()
+                .sorted((a, b) -> {
+                    int countA = current.board().count(a.id());
+                    int countB = current.board().count(b.id());
+                    if (countA != countB) {
+                        return Integer.compare(countB, countA);
+                    }
+                    long timeA = current.board().lastClaimTime(a.id());
+                    long timeB = current.board().lastClaimTime(b.id());
+                    return Long.compare(timeA, timeB);
+                })
+                .toList();
+
+        List<MatchRecord.TeamResult> rankingRecords = new ArrayList<>();
+        for (Team team : ranked) {
+            rankingRecords.add(new MatchRecord.TeamResult(
+                    team.id(),
+                    team.name(),
+                    team.color().asHexString(),
+                    current.board().count(team.id()),
+                    teamPlayerNames(team)
+            ));
+        }
+
+        MatchRecord.TeamResult winnerRecord = null;
+        if (winner != null) {
+            winnerRecord = new MatchRecord.TeamResult(
+                    winner.id(),
+                    winner.name(),
+                    winner.color().asHexString(),
+                    current.board().count(winner.id()),
+                    teamPlayerNames(winner)
+            );
+        }
+
+        MatchRecord.FirstClaim firstRecord = null;
+        Round.FirstClaim first = current.firstClaim();
+        if (first != null) {
+            Team claimerTeam = teams.byId(first.teamId());
+            String itemKey = current.card().item(first.cell());
+            firstRecord = new MatchRecord.FirstClaim(
+                    first.cell(),
+                    itemKey,
+                    first.teamId(),
+                    claimerTeam != null ? claimerTeam.name() : "?",
+                    first.elapsedMs(),
+                    clock(first.elapsedMs())
+            );
+        }
+
+        MatchRecord record = new MatchRecord(
+                id,
+                now,
+                date,
+                current.seed(),
+                current.mode().name(),
+                current.board().winMode().name(),
+                current.board().isLockout(),
+                current.elapsedMs(),
+                clock(current.elapsedMs()),
+                reason,
+                winnerRecord,
+                rankingRecords,
+                firstRecord,
+                current.card().items()
+        );
+
+        int maxSaved = config != null ? config.historyMaxSavedMatches() : 50;
+        plugin.matchHistory().recordMatch(record, maxSaved);
+    }
+
+    private List<String> teamPlayerNames(Team team) {
+        List<String> names = new ArrayList<>();
+        for (UUID uuid : team.members()) {
+            Player online = Bukkit.getPlayer(uuid);
+            if (online != null) {
+                names.add(online.getName());
+            } else {
+                String name = Bukkit.getOfflinePlayer(uuid).getName();
+                names.add(name != null ? name : uuid.toString());
+            }
+        }
+        return names;
     }
 
     private Messages messages() {

@@ -199,4 +199,14 @@ update-notifier:
   # Hours between automatic background checks while the server runs. 0 disables the timer.
   check-interval-hours: 24
 
+# Match history and logs.
+# Completed matches are saved asynchronously to data/matches/ as JSON files.
+history:
+  # Set to false to disable saving match results and in-game match history.
+  enabled: true
+  # Maximum number of match files to keep in data/matches/.
+  # The oldest matches are deleted when new ones finish. 0 disables the limit.
+  max-saved-matches: 50
+
+
 

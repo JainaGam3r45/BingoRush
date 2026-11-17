@@ -31,6 +31,8 @@ help:
   reroll: "<white>/bingo reroll</white> <muted>|</muted> <body>Prepara otra cartilla para la próxima ronda"
   teams: "<white>/bingo teams add|remove|join|clear</white> <muted>|</muted> <body>Gestiona los equipos"
   reload: "<white>/bingo reload</white> <muted>|</muted> <body>Recarga la configuración"
+  history: "<white>/bingo history <hl>[id|página]</hl></white> <muted>|</muted> <body>Consulta el historial de partidas"
+  export: "<white>/bingo export <hl><id></hl></white> <muted>|</muted> <body>Muestra la ruta del archivo de una partida"
   version: "<white>/bingo version</white> <muted>|</muted> <body>Muestra la versión y comprueba actualizaciones"
 
 no-permission: "<prefix><err>No tienes permiso para eso."
@@ -167,5 +169,36 @@ update-up-to-date: "<prefix><body>BingoRush está actualizado (<ok>v<current></o
 update-rate-limited: "<prefix><err>Límite de peticiones de GitHub alcanzado. Prueba más tarde."
 update-not-found: "<prefix><muted>No se encontraron publicaciones en el repositorio todavía.</muted>"
 update-error: "<prefix><err>No se pudo conectar con GitHub para comprobar actualizaciones."
+
+# Match history.
+history:
+  disabled: "<prefix><err>El historial de partidas está desactivado en config.yml."
+  empty: "<prefix><muted>No hay ninguna partida registrada todavía.</muted>"
+  header: "<brand> <hl>Historial de Partidas <muted>(Página <page>/<total>)</muted></hl>"
+  entry: " <hl>#<id></hl> <muted>|</muted> <white><date></white> <muted>-</muted> <body>Ganador: <winner> <body>(<time>)</body> <view>"
+  view-button: "<hl>[Ver]</hl>"
+  view-hover: "<body>Ver detalles de la partida <hl>#<id></hl>"
+  pagination: "<muted><st>                             </st></muted>\n <prev> <muted>|</muted> <next>"
+  prev-button: "<hl>« Anterior</hl>"
+  prev-hover: "<body>Ir a la página <page>"
+  next-button: "<hl>Siguiente »</hl>"
+  next-hover: "<body>Ir a la página <page>"
+  detail-header: "<brand> <hl>Detalles de Partida <muted>#<id></muted></hl>"
+  detail-date: " <muted>»</muted> <white>Fecha:</white> <hl><date></hl>"
+  detail-mode: " <muted>»</muted> <white>Modo:</white> <hl><mode></hl> <muted>(<win_mode><lockout>)</muted>"
+  detail-duration: " <muted>»</muted> <white>Duración:</white> <hl><time></hl>"
+  detail-seed: " <muted>»</muted> <white>Semilla:</white> <muted><seed></muted>"
+  detail-winner: " <muted>»</muted> <white>Ganador:</white> <winner> <body>(<count> casillas)</body>"
+  detail-winner-none: " <muted>»</muted> <white>Ganador:</white> <muted>Sin ganador (empate/tiempo)</muted>"
+  detail-ranking-header: " <muted>»</muted> <white>Posiciones:</white>"
+  detail-ranking-entry: "   <hl><pos>º</hl> <team><muted>:</muted> <hl><count></hl> <body>casillas</body>"
+  detail-first-claim: " <muted>»</muted> <white>Primer reclamo:</white> <hl><item></hl> <body>por <team> <body>(<time>)</body>"
+  detail-first-claim-none: " <muted>»</muted> <white>Primer reclamo:</white> <muted>Ninguno</muted>"
+  detail-export-hint: " <muted>»</muted> <white>Archivo guardado en:</white> <muted>plugins/BingoRush/data/matches/<file></muted>"
+  exported: "<prefix><body>Partida <hl>#<id></hl> guardada en <hl>plugins/BingoRush/data/matches/<file></hl>."
+  not-found: "<prefix><err>No se encontró ninguna partida con el identificador <errval><id></errval><err>."
+  invalid-page: "<prefix><err>La página debe ser un número entre 1 y <total>."
+  cleared: "<prefix><body>Se ha borrado el historial de partidas."
+
 
 
