@@ -1,11 +1,13 @@
 package com.jifercraft.bingo.game;
 
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -146,6 +148,18 @@ public final class RoundListener implements Listener {
         if (game.isCardItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        game.playerDied(event);
+    }
+
+    // Post respawn: the player is back in the world, so a game mode change
+    // or a new item sticks.
+    @EventHandler
+    public void onRespawn(PlayerPostRespawnEvent event) {
+        game.playerRespawned(event.getPlayer());
     }
 
     @EventHandler

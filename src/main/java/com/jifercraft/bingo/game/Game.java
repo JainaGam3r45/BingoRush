@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -28,6 +29,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -35,6 +37,7 @@ import org.bukkit.World;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
@@ -61,6 +64,8 @@ public final class Game {
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
+    // Game mode each knocked out player had before turning spectator.
+    private final Map<UUID, GameMode> savedGameModes = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
     private BukkitTask sweepTask;
@@ -167,16 +172,16 @@ public final class Game {
     }
 
     public void startRound(CommandSender caller, BingoGameMode modeOverride, Boolean lockoutOverride, String seedArg) {
-        startRound(caller, modeOverride, null, lockoutOverride, null, seedArg);
+        startRound(caller, modeOverride, null, lockoutOverride, null, null, seedArg);
     }
 
     /**
      * Starts a round, optionally overriding single settings. The host panel
-     * passes its four picks; the command passes null for whatever it did not
+     * passes all its picks; the command passes null for whatever it did not
      * name, which falls back to config.yml.
      */
     public void startRound(CommandSender caller, BingoGameMode modeOverride, WinMode winModeOverride,
-            Boolean lockoutOverride, Long timeLimitOverride, String seedArg) {
+            Boolean lockoutOverride, Long timeLimitOverride, Integer livesOverride, String seedArg) {
         if (round != null) {
             messages().send(caller, "round-already-running");
             return;
@@ -190,6 +195,7 @@ public final class Game {
         WinMode winMode = winModeOverride != null ? winModeOverride : config.winMode();
         boolean lockout = lockoutOverride != null ? lockoutOverride : config.lockout();
         roundTimeLimit = timeLimitOverride != null ? timeLimitOverride : config.timeLimitSeconds();
+        int lives = livesOverride != null ? livesOverride : config.lives();
         long seed = seedArg != null && !seedArg.isBlank()
                 ? CardGenerator.seedFrom(seedArg)
                 : nextSeed();
@@ -209,7 +215,7 @@ public final class Game {
             return;
         }
         roundConfig = config;
-        round = new Round(seed, mode, card, new ClaimBoard(winMode, lockout));
+        round = new Round(seed, mode, card, new ClaimBoard(winMode, lockout), lives);
         // The lobby menus are gone the moment a round exists, countdown included.
         teamMenu.closeAll();
         setupMenu.closeAll();
@@ -300,6 +306,10 @@ public final class Game {
         if (current != null && current.state() != Round.State.COUNTDOWN
                 && config != null && config.lateJoin() == LateJoin.SPECTATE) {
             messages().send(player, "late-join-spectate");
+            return;
+        }
+        if (current != null && current.isEliminated(player.getUniqueId())) {
+            messages().send(player, "eliminated-cannot-join");
             return;
         }
         Team currentTeam = teams.of(player.getUniqueId());
@@ -549,7 +559,8 @@ public final class Game {
      */
     public void checkClaims(Player player) {
         Round current = round;
-        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ITEMS) {
+        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ITEMS
+                || current.isEliminated(player.getUniqueId())) {
             return;
         }
         Team team = teams.of(player.getUniqueId());
@@ -590,7 +601,12 @@ public final class Game {
         }
         if (round != null) {
             Team team = teams.of(player.getUniqueId());
-            if (team != null) {
+            if (team != null && round.isEliminated(player.getUniqueId())) {
+                hud.playerJoined(player);
+                if (!player.isDead()) {
+                    player.setGameMode(GameMode.SPECTATOR);
+                }
+            } else if (team != null) {
                 hud.playerJoined(player);
                 giveCardItem(player);
             } else {
@@ -668,7 +684,7 @@ public final class Game {
         roundWriter.close();
         if (round != null) {
             try {
-                RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories);
+                RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories, savedGameModes);
             } catch (RuntimeException e) {
                 plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             }
@@ -806,6 +822,7 @@ public final class Game {
         cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();
+        restoreGameModes();
         removeCardItemsFromAll();
         roundWriter.delete();
         roundRestoredUnfinished = false;
@@ -839,7 +856,7 @@ public final class Game {
         }
         String json;
         try {
-            json = RoundStorage.toJson(round, roundTimeLimit, savedInventories);
+            json = RoundStorage.toJson(round, roundTimeLimit, savedInventories, savedGameModes);
         } catch (RuntimeException e) {
             plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             return;
@@ -858,6 +875,8 @@ public final class Game {
             this.roundTimeLimit = restored.timeLimitSeconds();
             this.savedInventories.clear();
             this.savedInventories.putAll(restored.savedInventories());
+            this.savedGameModes.clear();
+            this.savedGameModes.putAll(restored.savedGameModes());
             this.roundRestoredUnfinished = true;
 
             hud.restorePaused(restored.timeLimitSeconds());
@@ -968,7 +987,8 @@ public final class Game {
      */
     public void checkAdvancementClaim(Player player, Advancement advancement) {
         Round current = round;
-        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ADVANCEMENTS) {
+        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ADVANCEMENTS
+                || current.isEliminated(player.getUniqueId())) {
             return;
         }
         NamespacedKey key = advancement.getKey();
@@ -1051,6 +1071,114 @@ public final class Game {
         } else {
             saveActiveRound();
         }
+    }
+
+    /**
+     * A team member died. The card item never drops; with limited lives the
+     * death is counted, and the last one turns the player into a spectator
+     * when they respawn.
+     */
+    public void playerDied(PlayerDeathEvent event) {
+        Round current = round;
+        Player player = event.getPlayer();
+        Team team = teams.of(player.getUniqueId());
+        if (current == null || team == null) {
+            return;
+        }
+        // Handed back on respawn; on the ground anyone could pick it up.
+        event.getDrops().removeIf(this::isCardItem);
+        if (current.state() != Round.State.RUNNING || current.lives() == 0) {
+            return;
+        }
+        if (!current.recordDeath(player.getUniqueId())) {
+            int left = current.livesLeft(player.getUniqueId());
+            if (left > 0) {
+                messages().send(player, left == 1 ? "lives-left-one" : "lives-left",
+                        Placeholder.unparsed("lives", String.valueOf(left)));
+            }
+            saveActiveRound();
+            return;
+        }
+        savedGameModes.putIfAbsent(player.getUniqueId(), player.getGameMode());
+        broadcast("player-eliminated", Placeholder.unparsed("player", player.getName()), teamPlaceholder(team));
+        messages().console("<hl><player></hl> is out of lives (<team><body>)",
+                Placeholder.unparsed("player", player.getName()), teamPlaceholder(team));
+        if (current.teamsStanding(Map.of(team.id(), team.members())).isEmpty()) {
+            broadcast("team-eliminated", teamPlaceholder(team));
+        }
+        saveActiveRound();
+        // Not from inside the death event: ending the round restores
+        // inventories, and the server empties this one right after the event.
+        Bukkit.getScheduler().runTask(plugin, () -> checkStanding(current));
+    }
+
+    /** Puts knocked out players into spectator and hands the card back to the rest. */
+    public void playerRespawned(Player player) {
+        Round current = round;
+        if (current == null) {
+            // The round ended while this player was on the death screen.
+            pendingRestores.applyTo(player);
+            return;
+        }
+        if (teams.of(player.getUniqueId()) == null) {
+            return;
+        }
+        if (current.isEliminated(player.getUniqueId())) {
+            player.setGameMode(GameMode.SPECTATOR);
+            messages().send(player, "eliminated-spectator");
+            return;
+        }
+        giveCardItem(player);
+    }
+
+    // The last team standing wins, but only when there was someone to beat:
+    // a host testing alone must not win the moment they die.
+    private void checkStanding(Round current) {
+        if (round != current || current.state() != Round.State.RUNNING) {
+            return;
+        }
+        Map<Integer, Set<UUID>> membersByTeam = new HashMap<>();
+        for (Team team : teams.all()) {
+            if (team.size() > 0) {
+                membersByTeam.put(team.id(), team.members());
+            }
+        }
+        List<Integer> standing = current.teamsStanding(membersByTeam);
+        if (standing.isEmpty()) {
+            finishByElimination(current);
+        } else if (standing.size() == 1 && membersByTeam.size() > 1) {
+            Team winner = teams.byId(standing.getFirst());
+            if (winner != null) {
+                winByLastTeam(current, winner);
+            }
+        }
+    }
+
+    private void winByLastTeam(Round current, Team winner) {
+        String time = clock(current.elapsedMs());
+        broadcast("round-last-team-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
+        messages().console("Round won by <team><body>, last team standing, seed <hl><seed></hl>",
+                teamPlaceholder(winner), Placeholder.unparsed("seed", String.valueOf(current.seed())));
+        broadcastBreakdown(current);
+        recordMatchResult(current, winner, "LAST_TEAM");
+        hud.won(winner);
+        endRound();
+    }
+
+    // Everyone is out: the round ends like a timeout, most cells first.
+    private void finishByElimination(Round current) {
+        Team winner = teams.byId(current.board().leader().orElse(-1));
+        broadcast("round-all-eliminated");
+        if (winner != null) {
+            broadcast("round-all-eliminated-winner", teamPlaceholder(winner),
+                    Placeholder.unparsed("count", String.valueOf(current.board().count(winner.id()))));
+        }
+        messages().console("Every team is out of lives, seed <hl><seed></hl>",
+                Placeholder.unparsed("seed", String.valueOf(current.seed())));
+        broadcastBreakdown(current);
+        recordMatchResult(current, winner, "ELIMINATION");
+        hud.timeUp();
+        endRound();
     }
 
     private void winByCompletion(Round current, Team winner) {
@@ -1148,13 +1276,27 @@ public final class Game {
     private void restoreInventories() {
         for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
-            if (player != null) {
+            // A player on the death screen respawns with an empty inventory
+            // unless keepInventory is on, so theirs waits for the respawn.
+            if (player != null && !player.isDead()) {
                 player.getInventory().setContents(entry.getValue());
             } else {
                 pendingRestores.addInventory(entry.getKey(), entry.getValue());
             }
         }
         savedInventories.clear();
+    }
+
+    private void restoreGameModes() {
+        for (Map.Entry<UUID, GameMode> entry : savedGameModes.entrySet()) {
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player != null && !player.isDead()) {
+                player.setGameMode(entry.getValue());
+            } else {
+                pendingRestores.addGameMode(entry.getKey(), entry.getValue());
+            }
+        }
+        savedGameModes.clear();
     }
 
     // One spot per team around the world spawn, so teams start apart but

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.configuration.serialization.ConfigurationSerialization;
@@ -252,5 +253,55 @@ class RoundStorageTest {
         assertTrue(RoundStorage.delete(saveFile));
         assertFalse(RoundStorage.exists(saveFile));
         assertFalse(Files.exists(saveFile.toPath()));
+    }
+
+    @Test
+    void livesAndGameModesSurviveARestart(@TempDir Path tempDir) {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "minecraft:item_" + i).toList();
+        Round round = new Round(7L, BingoGameMode.ITEMS, new BingoCard(7L, items), new ClaimBoard(WinMode.FULL_CARD), 2);
+        UUID out = UUID.randomUUID();
+        UUID hurt = UUID.randomUUID();
+        round.beginRun();
+        round.recordDeath(out);
+        round.recordDeath(out);
+        round.recordDeath(hurt);
+
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+        RoundStorage.save(saveFile, round, 0L, Map.of(), Map.of(out, GameMode.SURVIVAL));
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        assertEquals(2, restored.round().lives());
+        assertTrue(restored.round().isEliminated(out));
+        assertEquals(1, restored.round().livesLeft(hurt));
+        assertEquals(GameMode.SURVIVAL, restored.savedGameModes().get(out));
+    }
+
+    @Test
+    void loadsAFileFromBeforeLives(@TempDir Path tempDir) throws Exception {
+        // Shape of active-round.json as 0.2.0-pre.2 wrote it.
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "\"minecraft:item_" + i + "\"").toList();
+        String json = """
+                {
+                  "seed": 9,
+                  "mode": "ITEMS",
+                  "winMode": "LINE",
+                  "lockout": false,
+                  "state": "RUNNING",
+                  "elapsedMs": 5000,
+                  "timeLimitSeconds": 600,
+                  "items": [%s],
+                  "claims": [],
+                  "savedInventories": {}
+                }
+                """.formatted(String.join(",", items));
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+        Files.writeString(saveFile.toPath(), json);
+
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        assertEquals(0, restored.round().lives());
+        assertFalse(restored.round().isEliminated(UUID.randomUUID()));
+        assertTrue(restored.savedGameModes().isEmpty());
+        assertEquals(Round.State.RUNNING, restored.originalState());
     }
 }

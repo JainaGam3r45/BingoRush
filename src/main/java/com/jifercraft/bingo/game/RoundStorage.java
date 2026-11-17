@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import org.bukkit.GameMode;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
@@ -46,7 +48,12 @@ public final class RoundStorage {
             List<String> items,
             List<ClaimBoard.ClaimRecord> claims,
             FirstClaimRecord firstClaim,
-            Map<String, String> savedInventories
+            Map<String, String> savedInventories,
+            // Added in 0.2.0. Files written before that have none of these,
+            // and Gson leaves them at 0 and null.
+            int lives,
+            Map<String, Integer> deaths,
+            Map<String, String> savedGameModes
     ) {
     }
 
@@ -54,7 +61,8 @@ public final class RoundStorage {
             Round round,
             long timeLimitSeconds,
             Map<UUID, ItemStack[]> savedInventories,
-            Round.State originalState
+            Round.State originalState,
+            Map<UUID, GameMode> savedGameModes
     ) {
     }
 
@@ -66,7 +74,12 @@ public final class RoundStorage {
     }
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories) {
-        write(file, toJson(round, timeLimitSeconds, savedInventories));
+        save(file, round, timeLimitSeconds, savedInventories, Map.of());
+    }
+
+    public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
+            Map<UUID, GameMode> savedGameModes) {
+        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes));
     }
 
     /**
@@ -74,7 +87,13 @@ public final class RoundStorage {
      * item stacks, so call it on the main thread; {@link #write} can then run
      * anywhere.
      */
-    public static String toJson(Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories) {
+    public static String toJson(Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
+            Map<UUID, GameMode> savedGameModes) {
+        Map<String, Integer> deaths = new HashMap<>();
+        round.deaths().forEach((id, count) -> deaths.put(id.toString(), count));
+        Map<String, String> gameModes = new HashMap<>();
+        savedGameModes.forEach((id, mode) -> gameModes.put(id.toString(), mode.name()));
+
         Map<String, String> encodedInventories = new HashMap<>();
         if (savedInventories != null) {
             for (Map.Entry<UUID, ItemStack[]> entry : savedInventories.entrySet()) {
@@ -102,7 +121,10 @@ public final class RoundStorage {
                 round.card().items(),
                 round.board().allClaims(),
                 firstRecord,
-                encodedInventories
+                encodedInventories,
+                round.lives(),
+                deaths,
+                gameModes
         );
 
         return GSON.toJson(data);
@@ -164,7 +186,9 @@ public final class RoundStorage {
                     board,
                     Round.State.PAUSED,
                     data.elapsedMs(),
-                    firstClaim
+                    firstClaim,
+                    data.lives(),
+                    parseIds(data.deaths(), Integer::valueOf)
             );
 
             Map<UUID, ItemStack[]> inventories = new HashMap<>();
@@ -181,10 +205,27 @@ public final class RoundStorage {
             }
 
             Round.State originalState = Round.State.valueOf(data.state());
-            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState);
+            Map<UUID, GameMode> gameModes = parseIds(data.savedGameModes(), GameMode::valueOf);
+            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState, gameModes);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load round state from " + file.getPath(), e);
         }
+    }
+
+    // Entries with a bad id or value are skipped; one broken player must not
+    // cost the whole round.
+    private static <V, R> Map<UUID, R> parseIds(Map<String, V> raw, Function<String, R> parse) {
+        Map<UUID, R> parsed = new HashMap<>();
+        if (raw == null) {
+            return parsed;
+        }
+        raw.forEach((id, value) -> {
+            try {
+                parsed.put(UUID.fromString(id), parse.apply(String.valueOf(value)));
+            } catch (IllegalArgumentException ignored) {
+            }
+        });
+        return parsed;
     }
 
     public static boolean delete(File file) {

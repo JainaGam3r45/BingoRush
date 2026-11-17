@@ -14,6 +14,12 @@ win-mode: full
 # forever, preventing rivals from claiming it.
 lockout: false
 
+# Lives per player during a round. A player who uses them all watches the
+# rest as a spectator, and a team with nobody left is out. When only one team
+# is still standing it wins; if every team is out, the most cells wins.
+# 0 means unlimited lives, 1 is hardcore.
+lives: 0
+
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
 # clock: the round runs until a team completes the card.

@@ -50,6 +50,7 @@ public final class BingoConfig {
     private final BingoGameMode gameMode;
     private final WinMode winMode;
     private final boolean lockout;
+    private final int lives;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
     private final int teamSize;
@@ -69,7 +70,8 @@ public final class BingoConfig {
     private final boolean historyEnabled;
     private final int historyMaxSavedMatches;
 
-    private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, long timeLimitSeconds, int countdownSeconds, int teamSize,
+    private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives, long timeLimitSeconds,
+            int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
             Map<String, Advancement> advancementsByKey, Map<SoundId, Key> sounds,
@@ -78,6 +80,7 @@ public final class BingoConfig {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
+        this.lives = lives;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
         this.teamSize = teamSize;
@@ -121,6 +124,11 @@ public final class BingoConfig {
         }
 
         boolean lockout = yaml.getBoolean("lockout", false);
+
+        int lives = yaml.getInt("lives", 0);
+        if (lives < 0) {
+            problems.add("lives is " + lives + ", use 0 for unlimited or 1 for hardcore");
+        }
 
         long timeLimit = yaml.getLong("time-limit", 1800);
         if (timeLimit < 0) {
@@ -320,7 +328,7 @@ public final class BingoConfig {
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(gameMode, winMode, lockout, timeLimit, countdown, teamSize, clearInventories,
+        return new BingoConfig(gameMode, winMode, lockout, lives, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
                 historyEnabled, historyMaxSavedMatches);
@@ -332,6 +340,11 @@ public final class BingoConfig {
 
     public WinMode winMode() {
         return winMode;
+    }
+
+    /** Lives per player in a round; 0 for unlimited. */
+    public int lives() {
+        return lives;
     }
 
     public boolean lockout() {

@@ -66,7 +66,8 @@ public final class SetupMenu {
             messages.send(player, "round-config-broken");
             return;
         }
-        settings = new RoundSettings(config.gameMode(), config.winMode(), config.lockout(), config.timeLimitSeconds());
+        settings = new RoundSettings(config.gameMode(), config.winMode(), config.lockout(), config.timeLimitSeconds(),
+                config.lives());
         InventoryView view = MenuType.GENERIC_9X3.builder()
                 .title(messages.render("setup-menu-title"))
                 .build(player);
@@ -125,6 +126,7 @@ public final class SetupMenu {
             case "win" -> settings.cycleWinMode();
             case "lockout" -> settings.toggleLockout();
             case "time" -> settings.cycleTimeLimit();
+            case "lives" -> settings.cycleLives();
             case "start" -> {
                 start(player);
                 return;
@@ -141,18 +143,20 @@ public final class SetupMenu {
         game.playSound(player, BingoConfig.SoundId.MENU_CLICK);
         // startRound re-checks the round state and closes this panel on success.
         game.startRound(player, settings.mode(), settings.winMode(),
-                settings.lockout(), settings.timeLimitSeconds(), null);
+                settings.lockout(), settings.timeLimitSeconds(), settings.lives(), null);
     }
 
     private void render(Inventory top) {
         for (int slot = 0; slot < top.getSize(); slot++) {
             top.setItem(slot, filler());
         }
-        top.setItem(10, toggleItem(modeIcon(), "setup-mode-name", modeValue(), modeDescription(), false, "mode"));
+        top.setItem(11, toggleItem(modeIcon(), "setup-mode-name", modeValue(), modeDescription(), false, "mode"));
         top.setItem(12, toggleItem(winIcon(), "setup-win-name", winValue(), winDescription(), false, "win"));
-        top.setItem(14, toggleItem(ItemType.SHIELD, "setup-lockout-name", lockoutValue(), "setup-lockout-desc",
+        top.setItem(13, toggleItem(ItemType.SHIELD, "setup-lockout-name", lockoutValue(), "setup-lockout-desc",
                 settings.lockout(), "lockout"));
-        top.setItem(16, toggleItem(ItemType.CLOCK, "setup-time-name", timeValue(), "setup-time-desc", false, "time"));
+        top.setItem(14, toggleItem(livesIcon(), "setup-lives-name", livesValue(), "setup-lives-desc",
+                settings.lives() == 1, "lives"));
+        top.setItem(15, toggleItem(ItemType.CLOCK, "setup-time-name", timeValue(), "setup-time-desc", false, "time"));
         top.setItem(22, startItem());
     }
 
@@ -186,6 +190,7 @@ public final class SetupMenu {
             lore.add(summary("setup-start-mode", modeValue()));
             lore.add(summary("setup-start-win", winValue()));
             lore.add(summary("setup-start-lockout", lockoutValue()));
+            lore.add(summary("setup-start-lives", livesValue()));
             lore.add(summary("setup-start-time", timeValue()));
             lore.add(messages.render("menu-cell-separator"));
             lore.add(messages.render("setup-start-hint"));
@@ -228,6 +233,19 @@ public final class SetupMenu {
     private Component winValue() {
         return messages.render(settings.winMode() == WinMode.LINE
                 ? "setup-value-line" : "setup-value-full");
+    }
+
+    private ItemType livesIcon() {
+        return settings.lives() == 0 ? ItemType.GOLDEN_APPLE : ItemType.TOTEM_OF_UNDYING;
+    }
+
+    private Component livesValue() {
+        return switch (settings.lives()) {
+            case 0 -> messages.render("setup-value-lives-unlimited");
+            case 1 -> messages.render("setup-value-lives-hardcore");
+            default -> messages.render("setup-value-lives",
+                    Placeholder.unparsed("lives", String.valueOf(settings.lives())));
+        };
     }
 
     private Component lockoutValue() {
