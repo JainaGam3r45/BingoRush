@@ -959,6 +959,10 @@ public final class Game {
             hud.restorePaused(restored.timeLimitSeconds());
             // The tab is not saved anywhere; the restart wiped it from the server.
             loadAdvancementTab();
+            // Shutdown put the announceAdvancements rule back; the round needs it off again.
+            if (roundConfig != null && roundConfig.advancementChat() != ChatStyle.VANILLA) {
+                advancements.silenceAnnouncements(true);
+            }
 
             messages().console("Found an unfinished round from the last session (seed <hl><seed></hl>),"
                     + " restored paused. Run <hl>/bingo resume</hl> when players are back.",
