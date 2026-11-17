@@ -111,6 +111,13 @@ death-message: "<prefix><muted>☠</muted> <body><message>"
 death-message-lives: "<prefix><muted>☠</muted> <body><message> <muted>(vidas: <hl><lives></hl><muted>)"
 death-message-eliminated: "<prefix><err>☠</err> <body><message> <muted>· <err>sin vidas, pasa a espectador</err>"
 advancement-message: "<prefix><hl><player></hl> <muted>(<team><muted>)</muted> <body>ha conseguido el logro <advancement>"
+# The round card in the advancements screen (L). <detail> is the advancement
+# description in advancement rounds and card-tab-cell-item in item rounds.
+card-tab-title: "<brand>"
+card-tab-description: "<body>La cartilla de tu equipo en esta ronda.<br><muted>Semilla <seed>"
+card-tab-cell-title: "<hl>#<number></hl> <white><item>"
+card-tab-cell-description: "<body><detail><br><muted>Fila <row>, columna <column>"
+card-tab-cell-item: "Tenlo en el inventario para marcarla."
 
 # Match breakdown.
 breakdown:

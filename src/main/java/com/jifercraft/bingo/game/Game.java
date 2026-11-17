@@ -66,6 +66,7 @@ public final class Game {
     private final File activeRoundFile;
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
+    private final CardAdvancements cardAdvancements;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     // Game mode each knocked out player had before turning spectator.
     private final Map<UUID, GameMode> savedGameModes = new HashMap<>();
@@ -92,6 +93,7 @@ public final class Game {
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
         this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
+        this.cardAdvancements = new CardAdvancements(plugin);
         this.pendingRestores = new PendingRestores(new File(plugin.getDataFolder(), "data/pending-restores.json"),
                 plugin.getLogger());
     }
@@ -170,6 +172,36 @@ public final class Game {
     }
 
     /** A configured sound for one player, for menu feedback. */
+    private void loadAdvancementTab() {
+        if (round == null || roundConfig == null || !roundConfig.advancementTab()) {
+            return;
+        }
+        if (cardAdvancements.load(round, roundConfig)) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                cardAdvancements.sync(player, round, teams.of(player.getUniqueId()));
+            }
+        }
+    }
+
+    private void syncAdvancementTab(Team team) {
+        if (round == null) {
+            return;
+        }
+        for (UUID memberId : team.members()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null) {
+                cardAdvancements.sync(member, round, team);
+            }
+        }
+    }
+
+    private void retireAdvancementTab() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            cardAdvancements.clear(player);
+        }
+        cardAdvancements.retire();
+    }
+
     public void playSound(Player player, BingoConfig.SoundId id) {
         hud.play(id, player);
     }
@@ -355,6 +387,7 @@ public final class Game {
             // Joined during the countdown or a round that allows late play.
             giveCardItem(player);
             hud.playerJoined(player);
+            cardAdvancements.sync(player, current, target);
         }
     }
 
@@ -370,6 +403,7 @@ public final class Game {
         if (round != null) {
             hud.playerLeft(player);
             removeCardItems(player);
+            cardAdvancements.clear(player);
         }
     }
 
@@ -602,6 +636,11 @@ public final class Game {
         if (roundRestoredUnfinished && player.hasPermission("bingo.admin")) {
             messages().send(player, "round-restored-admin");
         }
+        if (round != null && cardAdvancements.isLoaded()) {
+            cardAdvancements.sync(player, round, teams.of(player.getUniqueId()));
+        } else {
+            cardAdvancements.clear(player);
+        }
         if (round != null) {
             Team team = teams.of(player.getUniqueId());
             if (team != null && round.isEliminated(player.getUniqueId())) {
@@ -701,6 +740,7 @@ public final class Game {
             restoreInventories();
         }
         removeCardItemsFromAll();
+        retireAdvancementTab();
         // Last, so whatever restoreInventories queued above reaches the disk.
         pendingRestores.close();
         round = null;
@@ -763,6 +803,7 @@ public final class Game {
             broadcast("round-cleared-inventories");
         }
         giveCardItems();
+        loadAdvancementTab();
         if (roundConfig.scatterPlayers()) {
             scatterTeams();
         }
@@ -827,6 +868,7 @@ public final class Game {
         restoreInventories();
         restoreGameModes();
         removeCardItemsFromAll();
+        retireAdvancementTab();
         roundWriter.delete();
         roundRestoredUnfinished = false;
         round = null;
@@ -883,6 +925,8 @@ public final class Game {
             this.roundRestoredUnfinished = true;
 
             hud.restorePaused(restored.timeLimitSeconds());
+            // The tab is not saved anywhere; the restart wiped it from the server.
+            loadAdvancementTab();
 
             messages().console("Found an unfinished round from the last session (seed <hl><seed></hl>),"
                     + " restored paused. Run <hl>/bingo resume</hl> when players are back.",
@@ -972,6 +1016,7 @@ public final class Game {
         }
         hud.claimHappened(team);
         cardMenu.refresh(current);
+        syncAdvancementTab(team);
 
         int winnerId = current.board().completedWinner().orElse(-1);
         if (winnerId != -1) {
@@ -1021,6 +1066,9 @@ public final class Game {
      * claim a cell with it, and their chat line follows round-chat.advancements.
      */
     public void advancementDone(PlayerAdvancementDoneEvent event) {
+        if (cardAdvancements.isOurs(event.getAdvancement())) {
+            return;
+        }
         Player player = event.getPlayer();
         Team team = teams.of(player.getUniqueId());
         // Read before the claim: a winning claim ends the round and drops roundConfig.
@@ -1094,6 +1142,7 @@ public final class Game {
         }
         hud.claimHappened(team);
         cardMenu.refresh(current);
+        syncAdvancementTab(team);
 
         int winnerId = current.board().completedWinner().orElse(-1);
         if (winnerId != -1) {

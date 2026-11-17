@@ -27,6 +27,13 @@ round-chat:
   deaths: custom
   advancements: custom
 
+# Show the round card as its own tab in the advancements screen (L). Each
+# player sees the cells their team already has marked as done.
+# Adding the tab makes the server reload every player's advancements, so the
+# plugin saves all players first; Paper logs a warning about a manual save
+# when that happens, once per round.
+advancement-tab: true
+
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
 # clock: the round runs until a team completes the card.
