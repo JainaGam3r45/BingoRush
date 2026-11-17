@@ -240,6 +240,3 @@ history:
   not-found: "<prefix><err>No se encontró ninguna partida con el identificador <errval><id></errval><err>."
   invalid-page: "<prefix><err>La página debe ser un número entre 1 y <total>."
   cleared: "<prefix><body>Se ha borrado el historial de partidas."
-
-
-

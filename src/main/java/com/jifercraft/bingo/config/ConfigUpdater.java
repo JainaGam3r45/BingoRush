@@ -208,7 +208,9 @@ public final class ConfigUpdater {
             builder.append(line).append("\n");
         }
 
-        return builder.toString();
+        // Blank lines at the end of the template used to pile up in every
+        // rewritten file; one final newline is enough.
+        return builder.toString().stripTrailing() + "\n";
     }
 
     /**

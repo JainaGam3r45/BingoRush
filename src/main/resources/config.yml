@@ -210,6 +210,3 @@ history:
   # Maximum number of match files to keep in data/matches/.
   # The oldest matches are deleted when new ones finish. 0 disables the limit.
   max-saved-matches: 50
-
-
-
