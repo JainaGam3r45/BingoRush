@@ -9,24 +9,25 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Writes and deletes the active round file on one background thread.
- * A single thread on purpose: the Bukkit async pool gives no ordering, and a
- * save that lands after the delete at the end of a round would bring a
- * finished round back from the dead on the next boot.
+ * Writes and deletes one JSON file on its own background thread, in the
+ * order the calls were made. A single thread on purpose: the Bukkit async
+ * pool gives no ordering, and a save of the active round that lands after
+ * the delete at the end of a round would bring it back on the next boot.
  */
-final class ActiveRoundWriter {
+final class QueuedFileWriter {
 
     private final File file;
     private final Logger logger;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "BingoRush-RoundWriter");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ExecutorService executor;
 
-    ActiveRoundWriter(File file, Logger logger) {
+    QueuedFileWriter(File file, Logger logger) {
         this.file = file;
         this.logger = logger;
+        this.executor = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "BingoRush-" + file.getName());
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     void write(String json) {
@@ -34,7 +35,7 @@ final class ActiveRoundWriter {
             try {
                 RoundStorage.write(file, json);
             } catch (RuntimeException e) {
-                logger.log(Level.WARNING, "Could not save active round state", e);
+                logger.log(Level.WARNING, "Could not save " + file.getName(), e);
             }
         });
     }
@@ -48,7 +49,7 @@ final class ActiveRoundWriter {
         executor.shutdown();
         try {
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                logger.warning("Active round writes did not finish within 10 seconds");
+                logger.warning("Writes to " + file.getName() + " did not finish within 10 seconds");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

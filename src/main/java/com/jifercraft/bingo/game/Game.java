@@ -58,7 +58,7 @@ public final class Game {
     private final NamespacedKey cardItemTag;
     private final Hud hud;
     private final File activeRoundFile;
-    private final ActiveRoundWriter roundWriter;
+    private final QueuedFileWriter roundWriter;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
@@ -82,7 +82,7 @@ public final class Game {
         this.setupMenu = new SetupMenu(plugin, this, new NamespacedKey(plugin, "setup-menu"));
         this.hud = new Hud(plugin, this);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
-        this.roundWriter = new ActiveRoundWriter(activeRoundFile, plugin.getLogger());
+        this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
     }
 
     public Round round() {

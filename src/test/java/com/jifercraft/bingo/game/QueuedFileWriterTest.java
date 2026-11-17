@@ -13,14 +13,14 @@ import java.util.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class ActiveRoundWriterTest {
+class QueuedFileWriterTest {
 
     private static final Logger LOGGER = Logger.getAnonymousLogger();
 
     @Test
     void deleteAfterQueuedWritesLeavesNoFile(@TempDir Path tempDir) {
         File file = tempDir.resolve("data/active-round.json").toFile();
-        ActiveRoundWriter writer = new ActiveRoundWriter(file, LOGGER);
+        QueuedFileWriter writer = new QueuedFileWriter(file, LOGGER);
 
         for (int i = 0; i < 50; i++) {
             writer.write("{\"tick\":" + i + "}");
@@ -35,7 +35,7 @@ class ActiveRoundWriterTest {
     @Test
     void lastWriteWins(@TempDir Path tempDir) throws IOException {
         File file = tempDir.resolve("active-round.json").toFile();
-        ActiveRoundWriter writer = new ActiveRoundWriter(file, LOGGER);
+        QueuedFileWriter writer = new QueuedFileWriter(file, LOGGER);
 
         for (int i = 0; i < 50; i++) {
             writer.write("{\"tick\":" + i + "}");
@@ -48,7 +48,7 @@ class ActiveRoundWriterTest {
     @Test
     void writeAfterCloseRunsInline(@TempDir Path tempDir) {
         File file = tempDir.resolve("active-round.json").toFile();
-        ActiveRoundWriter writer = new ActiveRoundWriter(file, LOGGER);
+        QueuedFileWriter writer = new QueuedFileWriter(file, LOGGER);
         writer.close();
 
         writer.write("{}");
