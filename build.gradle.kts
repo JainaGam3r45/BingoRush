@@ -6,7 +6,7 @@ plugins {
 
 allprojects {
     group = "com.jifercraft"
-    version = "0.2.0-pre.2"
+    version = "0.2.0-pre.3"
 }
 
 // Every server jar lands in the root build/libs, next to each other.
