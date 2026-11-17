@@ -10,6 +10,10 @@ game-mode: items
 # column or diagonal.
 win-mode: full
 
+# Lockout mode: cells are exclusive. The first team to claim a cell locks it
+# forever, preventing rivals from claiming it.
+lockout: false
+
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
 # clock: the round runs until a team completes the card.
@@ -185,6 +189,7 @@ sounds:
   win: ui.toast.challenge_complete
   countdown: block.note_block.pling
   start: block.beacon.activate
+  lockout-lost: block.note_block.bass
 
 # Update notifications from the GitHub repository.
 # Checks run asynchronously in the background so they never slow down the server.

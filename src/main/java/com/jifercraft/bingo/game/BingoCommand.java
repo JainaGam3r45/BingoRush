@@ -67,20 +67,23 @@ public final class BingoCommand {
                                         game.openCardSpectator(player, StringArgumentType.getString(ctx, "team"))))))
                 .then(Commands.literal("start")
                         .requires(this::isAdmin)
-                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null, null)))
+                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null, null, null)))
                         .then(Commands.literal("items")
-                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ITEMS, null)))
-                                .then(Commands.argument("seed", StringArgumentType.greedyString())
-                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
-                                                BingoGameMode.ITEMS, StringArgumentType.getString(ctx, "seed"))))))
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ITEMS, null, null)))
+                                .then(Commands.argument("args", StringArgumentType.greedyString())
+                                        .suggests(this::suggestStartArgs)
+                                        .executes(ctx -> run(ctx, sender -> handleStart(sender,
+                                                BingoGameMode.ITEMS, StringArgumentType.getString(ctx, "args"))))))
                         .then(Commands.literal("advancements")
-                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ADVANCEMENTS, null)))
-                                .then(Commands.argument("seed", StringArgumentType.greedyString())
-                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
-                                                BingoGameMode.ADVANCEMENTS, StringArgumentType.getString(ctx, "seed"))))))
-                        .then(Commands.argument("seed", StringArgumentType.greedyString())
-                                .executes(ctx -> run(ctx, sender -> game.startRound(sender,
-                                        null, StringArgumentType.getString(ctx, "seed"))))))
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ADVANCEMENTS, null, null)))
+                                .then(Commands.argument("args", StringArgumentType.greedyString())
+                                        .suggests(this::suggestStartArgs)
+                                        .executes(ctx -> run(ctx, sender -> handleStart(sender,
+                                                BingoGameMode.ADVANCEMENTS, StringArgumentType.getString(ctx, "args"))))))
+                        .then(Commands.argument("args", StringArgumentType.greedyString())
+                                .suggests(this::suggestStartArgs)
+                                .executes(ctx -> run(ctx, sender -> handleStart(sender,
+                                        null, StringArgumentType.getString(ctx, "args"))))))
                 .then(Commands.literal("stop").requires(this::isAdmin)
                         .executes(ctx -> run(ctx, game::stopRound)))
                 .then(Commands.literal("pause").requires(this::isAdmin)
@@ -179,6 +182,49 @@ public final class BingoCommand {
         for (Team team : game.teams().all()) {
             if (team.name().toLowerCase(java.util.Locale.ROOT).startsWith(remaining)) {
                 builder.suggest(team.name());
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private void handleStart(CommandSender sender, BingoGameMode mode, String rawArgs) {
+        if (rawArgs == null || rawArgs.isBlank()) {
+            game.startRound(sender, mode, null, null);
+            return;
+        }
+        String trimmed = rawArgs.trim();
+        String[] parts = trimmed.split("\\s+", 2);
+        String first = parts[0].toLowerCase(java.util.Locale.ROOT);
+        Boolean lockout = null;
+        String seed = null;
+
+        if (first.startsWith("lockout:")) {
+            String val = first.substring("lockout:".length());
+            if ("true".equalsIgnoreCase(val) || "yes".equalsIgnoreCase(val)) {
+                lockout = Boolean.TRUE;
+            } else if ("false".equalsIgnoreCase(val) || "no".equalsIgnoreCase(val)) {
+                lockout = Boolean.FALSE;
+            }
+        } else if ("true".equalsIgnoreCase(first)) {
+            lockout = Boolean.TRUE;
+        } else if ("false".equalsIgnoreCase(first)) {
+            lockout = Boolean.FALSE;
+        }
+
+        if (lockout != null) {
+            seed = parts.length > 1 && !parts[1].isBlank() ? parts[1].trim() : null;
+        } else {
+            seed = trimmed;
+        }
+
+        game.startRound(sender, mode, lockout, seed);
+    }
+
+    private CompletableFuture<Suggestions> suggestStartArgs(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        String remaining = builder.getRemainingLowerCase();
+        for (String option : List.of("lockout:true", "lockout:false", "true", "false")) {
+            if (option.startsWith(remaining)) {
+                builder.suggest(option);
             }
         }
         return builder.buildFuture();

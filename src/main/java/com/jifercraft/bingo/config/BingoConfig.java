@@ -37,15 +37,17 @@ public final class BingoConfig {
         CLAIM,
         WIN,
         COUNTDOWN,
-        START;
+        START,
+        LOCKOUT_LOST;
 
         String configKey() {
-            return name().toLowerCase(Locale.ROOT);
+            return name().toLowerCase(Locale.ROOT).replace('_', '-');
         }
     }
 
     private final BingoGameMode gameMode;
     private final WinMode winMode;
+    private final boolean lockout;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
     private final int teamSize;
@@ -62,13 +64,14 @@ public final class BingoConfig {
     private final boolean updateNotifierEnabled;
     private final boolean updateNotifierOnJoin;
 
-    private BingoConfig(BingoGameMode gameMode, WinMode winMode, long timeLimitSeconds, int countdownSeconds, int teamSize,
+    private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, long timeLimitSeconds, int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
             ItemPool pool, ItemPool advancementPool, Map<String, ItemType> itemsByKey,
             Map<String, Advancement> advancementsByKey, Map<SoundId, Key> sounds,
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin) {
         this.gameMode = gameMode;
         this.winMode = winMode;
+        this.lockout = lockout;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
         this.teamSize = teamSize;
@@ -107,6 +110,8 @@ public final class BingoConfig {
         } else {
             problems.add("win-mode is '" + rawMode + "', use 'full' or 'line'");
         }
+
+        boolean lockout = yaml.getBoolean("lockout", false);
 
         long timeLimit = yaml.getLong("time-limit", 1800);
         if (timeLimit < 0) {
@@ -292,7 +297,7 @@ public final class BingoConfig {
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(gameMode, winMode, timeLimit, countdown, teamSize, clearInventories,
+        return new BingoConfig(gameMode, winMode, lockout, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin);
     }
@@ -303,6 +308,10 @@ public final class BingoConfig {
 
     public WinMode winMode() {
         return winMode;
+    }
+
+    public boolean lockout() {
+        return lockout;
     }
 
     /** 0 means the round has no clock. */
