@@ -79,7 +79,7 @@ public final class Advancements implements AdvancementSupport, Listener {
             return;
         }
         // Recipe unlocks and other hidden entries never show in chat.
-        boolean announced = !key.getKey().startsWith("recipes/") && !key.getKey().startsWith("root");
+        boolean announced = !key.getKey().startsWith("recipes/") && !key.getKey().endsWith("/root");
         game.advancementDone(event.getPlayer(), key.toString(), announced);
     }
 
@@ -363,6 +363,26 @@ public final class Advancements implements AdvancementSupport, Listener {
         }
         for (NamespacedKey key : leftovers) {
             Bukkit.getUnsafe().removeAdvancement(key);
+        }
+        // 1.21 renamed the datapack folder to "advancement", so files left in
+        // the old one are not loaded, not listed above, and never removed by
+        // the server. They are ours alone, so they go straight from disk.
+        if (!Bukkit.getWorlds().isEmpty()) {
+            File worldFolder = Bukkit.getWorlds().get(0).getWorldFolder();
+            deleteTree(new File(worldFolder, "datapacks/bukkit/data/" + namespace));
+            deleteTree(new File(worldFolder, "data/advancements/" + namespace));
+        }
+    }
+
+    private void deleteTree(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteTree(child);
+            }
+        }
+        if (file.exists() && !file.delete()) {
+            plugin.getLogger().warning("Could not delete leftover tab file " + file.getPath());
         }
     }
 
