@@ -163,7 +163,10 @@ public final class CardMenu {
         ClaimBoard board = round.board();
         boolean lockout = board.isLockout();
         OptionalInt owner = board.owner(cell);
-        boolean own = owner.isPresent() && owner.getAsInt() == viewer.id();
+        // owner() is only the first team to claim the cell. Outside lockout
+        // several teams can hold it, and a team that was not first still has to
+        // see the cell as its own.
+        boolean own = board.isClaimed(cell, viewer.id());
         boolean rival = lockout && owner.isPresent() && owner.getAsInt() != viewer.id();
 
         ItemStack stack;
@@ -250,7 +253,10 @@ public final class CardMenu {
         ClaimBoard board = round.board();
         boolean lockout = board.isLockout();
         OptionalInt owner = board.owner(cell);
-        boolean own = owner.isPresent() && owner.getAsInt() == viewer.id();
+        // owner() is only the first team to claim the cell. Outside lockout
+        // several teams can hold it, and a team that was not first still has to
+        // see the cell as its own.
+        boolean own = board.isClaimed(cell, viewer.id());
         boolean rival = lockout && owner.isPresent() && owner.getAsInt() != viewer.id();
 
         ItemStack stack;

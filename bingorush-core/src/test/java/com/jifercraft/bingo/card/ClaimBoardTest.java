@@ -196,4 +196,18 @@ class ClaimBoardTest {
         // Team 1 wins because of earlier last claim (t=111 vs t=223)
         assertEquals(1, board.completedWinner().getAsInt());
     }
+
+    @Test
+    void aLaterTeamStillOwnsItsClaimOutsideLockout() {
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD);
+
+        assertTrue(board.claim(7, 1, 1000L));
+        assertTrue(board.claim(7, 2, 2000L));
+        assertTrue(board.claim(7, 3, 3000L));
+
+        // The menu asks isClaimed for "is this cell mine"; owner is only the first claimer.
+        assertEquals(1, board.owner(7).getAsInt());
+        assertTrue(board.isClaimed(7, 3));
+        assertEquals(List.of(1, 2, 3), board.claimers(7));
+    }
 }
