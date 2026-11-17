@@ -257,6 +257,10 @@ public final class Game {
         // The lobby menus are gone the moment a round exists, countdown included.
         teamMenu.closeAll();
         setupMenu.closeAll();
+        // Loading the tab saves every player and rereads their advancements,
+        // which can take a moment: better during the countdown than on the
+        // tick the round starts, and before any inventory is cleared.
+        loadAdvancementTab();
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -812,7 +816,6 @@ public final class Game {
             broadcast("round-cleared-inventories");
         }
         giveCardItems();
-        loadAdvancementTab();
         if (roundConfig.scatterPlayers()) {
             scatterTeams();
         }
