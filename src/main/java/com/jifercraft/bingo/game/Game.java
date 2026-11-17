@@ -655,6 +655,9 @@ public final class Game {
                     player.setGameMode(GameMode.SPECTATOR);
                 }
             } else if (team != null) {
+                // Knocked out last round and offline when it ended: still a
+                // spectator, which would leave them unable to play this one.
+                pendingRestores.applyGameMode(player);
                 hud.playerJoined(player);
                 giveCardItem(player);
             } else {

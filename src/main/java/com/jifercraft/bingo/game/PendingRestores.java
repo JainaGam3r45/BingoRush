@@ -99,6 +99,28 @@ final class PendingRestores {
         save();
     }
 
+    /**
+     * Gives back only the game mode, for a player who joins a new round: the
+     * inventory waits, because the round is using theirs right now.
+     */
+    void applyGameMode(Player player) {
+        Entry entry = pending.get(player.getUniqueId());
+        if (entry == null || entry.gameMode() == null) {
+            return;
+        }
+        if (entry.inventory() == null) {
+            pending.remove(player.getUniqueId());
+        } else {
+            pending.put(player.getUniqueId(), new Entry(entry.inventory(), null));
+        }
+        try {
+            player.setGameMode(GameMode.valueOf(entry.gameMode()));
+        } catch (IllegalArgumentException e) {
+            logger.warning("Unknown game mode " + entry.gameMode() + " for " + player.getName());
+        }
+        save();
+    }
+
     private void save() {
         if (pending.isEmpty()) {
             writer.delete();
