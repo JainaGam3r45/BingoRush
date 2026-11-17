@@ -105,6 +105,18 @@ public final class Hud {
         play(BingoConfig.SoundId.CLAIM, onlineMembers(team));
     }
 
+    /** Plays the alert sound to rival players when a cell is locked in lockout mode. */
+    public void lockoutLost(Team claimingTeam) {
+        List<Player> rivals = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Team playerTeam = game.teams().of(player.getUniqueId());
+            if (playerTeam != null && playerTeam.id() != claimingTeam.id()) {
+                rivals.add(player);
+            }
+        }
+        play(BingoConfig.SoundId.LOCKOUT_LOST, rivals);
+    }
+
     /** Countdown title on screen and a pling for everyone. */
     public void countdownTick(int secondsLeft) {
         Title title = Title.title(
@@ -259,6 +271,9 @@ public final class Hud {
             return;
         }
         Key key = config.sound(id);
+        if (key == null && id == BingoConfig.SoundId.LOCKOUT_LOST) {
+            key = Key.key("minecraft:block.note_block.bass");
+        }
         if (key == null) {
             return;
         }
@@ -268,7 +283,8 @@ public final class Hud {
         if (sound == null) {
             return;
         }
-        Sound audible = Sound.sound(sound, Sound.Source.MASTER, SOUND_VOLUME, SOUND_PITCH);
+        float pitch = id == BingoConfig.SoundId.LOCKOUT_LOST ? 0.8f : SOUND_PITCH;
+        Sound audible = Sound.sound(sound, Sound.Source.MASTER, SOUND_VOLUME, pitch);
         for (Player player : to) {
             player.playSound(audible);
         }

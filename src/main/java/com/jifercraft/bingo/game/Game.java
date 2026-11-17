@@ -114,10 +114,14 @@ public final class Game {
     }
 
     public void startRound(CommandSender caller, String seedArg) {
-        startRound(caller, null, seedArg);
+        startRound(caller, null, null, seedArg);
     }
 
     public void startRound(CommandSender caller, BingoGameMode modeOverride, String seedArg) {
+        startRound(caller, modeOverride, null, seedArg);
+    }
+
+    public void startRound(CommandSender caller, BingoGameMode modeOverride, Boolean lockoutOverride, String seedArg) {
         if (round != null) {
             messages().send(caller, "round-already-running");
             return;
@@ -128,6 +132,7 @@ public final class Game {
             return;
         }
         BingoGameMode mode = modeOverride != null ? modeOverride : config.gameMode();
+        boolean lockout = lockoutOverride != null ? lockoutOverride : config.lockout();
         long seed = seedArg != null && !seedArg.isBlank()
                 ? CardGenerator.seedFrom(seedArg)
                 : nextSeed();
@@ -147,11 +152,12 @@ public final class Game {
             return;
         }
         roundConfig = config;
-        round = new Round(seed, mode, card, new ClaimBoard(config.winMode()));
+        round = new Round(seed, mode, card, new ClaimBoard(config.winMode(), lockout));
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
-            plugin.getLogger().info("Countdown of " + total + "s started, seed " + seed);
+            plugin.getLogger().info("Countdown of " + total + "s started, seed " + seed
+                    + (lockout ? " [lockout]" : ""));
             secondsLeft = total;
             hud.countdownTick(secondsLeft);
             countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCountdown, 20, 20);
@@ -727,11 +733,25 @@ public final class Game {
         }
         plugin.getLogger().info("Team " + team.name() + " claimed " + itemKey
                 + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        if (current.board().isLockout()) {
+            hud.lockoutLost(team);
+            Component rivalBar = messages().render("lockout-cell-lost-actionbar", item, teamPlaceholder(team));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                Team playerTeam = teams.of(player.getUniqueId());
+                if (playerTeam != null && playerTeam.id() != team.id()) {
+                    player.sendActionBar(rivalBar);
+                }
+            }
+        }
         hud.claimHappened(team);
         cardMenu.refresh(current);
-        // Only the team that just reached the win condition ends the round.
-        if (current.board().completedWinner().orElse(-1) == team.id()) {
-            winByCompletion(current, team);
+
+        int winnerId = current.board().completedWinner().orElse(-1);
+        if (winnerId != -1) {
+            Team winner = teams.byId(winnerId);
+            if (winner != null) {
+                winByCompletion(current, winner);
+            }
         }
     }
 
@@ -800,11 +820,25 @@ public final class Game {
 
         plugin.getLogger().info("Team " + team.name() + " claimed advancement " + advancement.getKey()
                 + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        if (current.board().isLockout()) {
+            hud.lockoutLost(team);
+            Component rivalBar = messages().render("lockout-advancement-lost-actionbar", adv, item, teamPlaceholder(team));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                Team playerTeam = teams.of(player.getUniqueId());
+                if (playerTeam != null && playerTeam.id() != team.id()) {
+                    player.sendActionBar(rivalBar);
+                }
+            }
+        }
         hud.claimHappened(team);
         cardMenu.refresh(current);
 
-        if (current.board().completedWinner().orElse(-1) == team.id()) {
-            winByCompletion(current, team);
+        int winnerId = current.board().completedWinner().orElse(-1);
+        if (winnerId != -1) {
+            Team winner = teams.byId(winnerId);
+            if (winner != null) {
+                winByCompletion(current, winner);
+            }
         }
     }
 
