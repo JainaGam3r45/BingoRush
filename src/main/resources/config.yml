@@ -2,6 +2,11 @@
 # Values the plugin reads are checked when it loads this file; mistakes are
 # printed to the console, one line each, naming the key to fix.
 
+# Language of every message players read, from lang/messages_<language>.yml.
+# "en" and "es" ship with the plugin. To add one, copy messages_en.yml to
+# messages_<code>.yml, translate it and put the code here.
+language: en
+
 # Game mode: "items" for classic item collection, "advancements" for vanilla
 # advancement hunt.
 game-mode: items
@@ -21,7 +26,7 @@ lockout: false
 lives: 0
 
 # What chat shows when a player in a round dies or gets an advancement.
-# "custom" uses the templates in messages.yml, "vanilla" keeps Minecraft's
+# "custom" uses the templates in the language file, "vanilla" keeps Minecraft's
 # own line and "hidden" removes it. Players outside the round are left alone.
 round-chat:
   deaths: custom
@@ -63,13 +68,13 @@ late-join: join
 # here, the plugin invents one per group as players join. Teams added at
 # runtime with /bingo teams add last until the server restarts.
 teams:
-  - name: Rojo
+  - name: Red
     color: "#FF5555"
-  - name: Azul
+  - name: Blue
     color: "#5555FF"
-  - name: Verde
+  - name: Green
     color: "#55FF55"
-  - name: Amarillo
+  - name: Yellow
     color: "#FFFF55"
 
 # The 25 cells of the card come from these tiers. Each tier lists the items

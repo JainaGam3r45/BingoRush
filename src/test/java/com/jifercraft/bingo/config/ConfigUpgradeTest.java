@@ -57,7 +57,7 @@ class ConfigUpgradeTest {
     void upgradeIsStable() throws Exception {
         for (String[] pair : new String[][]{
                 {"/config.yml", "/config-0.2.0-pre.1.yml"},
-                {"/messages.yml", "/messages-0.2.0-pre.1.yml"}}) {
+                {"/lang/messages_es.yml", "/messages-0.2.0-pre.1.yml"}}) {
             List<String> template = lines(pair[0]);
             String upgraded = upgrade(pair[0], pair[1]);
 
@@ -72,7 +72,7 @@ class ConfigUpgradeTest {
     void upgradeEndsWithOneNewline() throws Exception {
         for (String[] pair : new String[][]{
                 {"/config.yml", "/config-0.2.0-pre.1.yml"},
-                {"/messages.yml", "/messages-0.2.0-pre.1.yml"}}) {
+                {"/lang/messages_es.yml", "/messages-0.2.0-pre.1.yml"}}) {
             String upgraded = upgrade(pair[0], pair[1]);
             assertTrue(upgraded.endsWith("\n"), pair[0]);
             assertFalse(upgraded.endsWith("\n\n"), pair[0]);
@@ -82,8 +82,8 @@ class ConfigUpgradeTest {
     @Test
     void messagesUpgradeKeepsEveryOldValue() throws Exception {
         YamlConfiguration old = yaml(lines("/messages-0.2.0-pre.1.yml"));
-        YamlConfiguration template = yaml(lines("/messages.yml"));
-        YamlConfiguration result = yaml(upgrade("/messages.yml", "/messages-0.2.0-pre.1.yml").lines().toList());
+        YamlConfiguration template = yaml(lines("/lang/messages_es.yml"));
+        YamlConfiguration result = yaml(upgrade("/lang/messages_es.yml", "/messages-0.2.0-pre.1.yml").lines().toList());
 
         for (String key : old.getKeys(true)) {
             if (old.isConfigurationSection(key) || !template.contains(key)) {

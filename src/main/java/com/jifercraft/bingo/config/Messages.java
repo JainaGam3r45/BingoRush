@@ -1,9 +1,15 @@
 package com.jifercraft.bingo.config;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,20 +27,28 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * messages.yml, parsed. The palette at the top of the file becomes MiniMessage
- * tags, so <hl> and friends work in every template without being hardcoded
- * here. The plugin name, its gradient and the prefix are defined once in the
- * file and exposed as tags too.
+ * The language file picked in config.yml, parsed. Files live in
+ * lang/messages_<code>.yml; English and Spanish ship with the plugin and an
+ * admin can drop in more. The palette at the top of the file becomes
+ * MiniMessage tags, so <hl> and friends work in every template without being
+ * hardcoded here. The plugin name, its gradient and the prefix are defined
+ * once in the file and exposed as tags too.
  */
 public final class Messages {
 
     private static final Pattern LINE_BREAK = Pattern.compile("<br>|<newline>");
+    /** Languages inside the jar, kept up to date with new keys on every start. */
+    private static final List<String> BUNDLED = List.of("en", "es");
+    private static final String FALLBACK = "en";
+    // The code ends up in a file name, so nothing that could leave lang/.
+    private static final Pattern LANGUAGE_CODE = Pattern.compile("[a-z0-9_-]+");
 
     private final JavaPlugin plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final Map<String, TextColor> colors = new LinkedHashMap<>();
     private final Set<String> warned = ConcurrentHashMap.newKeySet();
     private YamlConfiguration yaml;
+    private String fileName = "lang/messages_" + FALLBACK + ".yml";
     private TagResolver base = TagResolver.empty();
 
     public Messages(JavaPlugin plugin) {
@@ -43,13 +57,30 @@ public final class Messages {
     }
 
     public void reload() {
-        File file = new File(plugin.getDataFolder(), "messages.yml");
-        if (!file.exists()) {
-            plugin.saveResource("messages.yml", false);
-        } else {
-            ConfigUpdater.update(plugin, "messages.yml");
+        for (String bundled : BUNDLED) {
+            String resource = path(bundled);
+            if (!new File(plugin.getDataFolder(), resource).exists()) {
+                plugin.saveResource(resource, false);
+            } else {
+                ConfigUpdater.update(plugin, resource);
+            }
         }
+        String language = plugin.getConfig().getString("language", FALLBACK).trim().toLowerCase(Locale.ROOT);
+        File file = new File(plugin.getDataFolder(), path(language));
+        if (!LANGUAGE_CODE.matcher(language).matches() || !file.isFile()) {
+            plugin.getLogger().warning("language is '" + language + "' but there is no " + path(language)
+                    + ", using English");
+            language = FALLBACK;
+            file = new File(plugin.getDataFolder(), path(FALLBACK));
+        }
+        fileName = path(language);
         yaml = YamlConfiguration.loadConfiguration(file);
+        // A translation an admin added may lack the keys of a newer version;
+        // those read the English text from the jar instead of the key name.
+        InputStream english = plugin.getResource(path(FALLBACK));
+        if (english != null) {
+            yaml.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(english, StandardCharsets.UTF_8)));
+        }
 
         colors.clear();
         warned.clear();
@@ -73,11 +104,37 @@ public final class Messages {
         base = builder.build();
     }
 
+    private static String path(String language) {
+        return "lang/messages_" + language + ".yml";
+    }
+
+    /**
+     * Moves a messages.yml from before the lang folder to lang/messages_es.yml.
+     * That file was Spanish and may be customized, so it is kept as the
+     * Spanish translation. True when a file was moved.
+     */
+    public static boolean migrateOldMessages(JavaPlugin plugin) {
+        File old = new File(plugin.getDataFolder(), "messages.yml");
+        File spanish = new File(plugin.getDataFolder(), path("es"));
+        if (!old.isFile() || spanish.exists()) {
+            return false;
+        }
+        try {
+            Files.createDirectories(spanish.getParentFile().toPath());
+            Files.move(old.toPath(), spanish.toPath());
+            return true;
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not move messages.yml to " + path("es") + ": " + e.getMessage());
+            return false;
+        }
+    }
+
     public Component render(String key, TagResolver... placeholders) {
-        String raw = yaml.getString(key, null);
+        // Single-argument getString reads the English defaults for missing keys.
+        String raw = yaml.getString(key);
         if (raw == null) {
             if (warned.add(key)) {
-                plugin.getLogger().warning("messages.yml has no key '" + key + "'");
+                plugin.getLogger().warning(fileName + " has no key '" + key + "'");
             }
             raw = key;
         }
@@ -91,7 +148,7 @@ public final class Messages {
      * own line, without the italics the client adds to lore by default.
      */
     public List<Component> renderLore(String key, TagResolver... placeholders) {
-        String raw = yaml.getString(key, null);
+        String raw = yaml.getString(key);
         if (raw == null) {
             return List.of(render(key, placeholders));
         }

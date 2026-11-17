@@ -11,6 +11,9 @@ import com.jifercraft.bingo.history.MatchHistory;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Locale;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -27,11 +30,17 @@ public final class BingoRush extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        boolean spanishBefore = Messages.migrateOldMessages(this);
         File configFile = new File(getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             saveDefaultConfig();
         } else {
             ConfigUpdater.update(this, "config.yml");
+        }
+        if (spanishBefore) {
+            // The updater just added language: en. A server that already ran
+            // in Spanish should not wake up in English after an update.
+            keepSpanish(configFile);
         }
         messages = new Messages(this);
         loadConfigOrLog();
@@ -116,6 +125,18 @@ public final class BingoRush extends JavaPlugin {
             } else {
                 updateChecker.stopPeriodicCheck();
             }
+        }
+    }
+
+    private void keepSpanish(File configFile) {
+        try {
+            String text = Files.readString(configFile.toPath(), StandardCharsets.UTF_8);
+            Files.writeString(configFile.toPath(),
+                    text.replaceFirst("(?m)^language:.*$", "language: \"es\""), StandardCharsets.UTF_8);
+            reloadConfig();
+            getLogger().info("Moved messages.yml to lang/messages_es.yml and set language: es");
+        } catch (IOException e) {
+            getLogger().warning("Could not set language: es in config.yml: " + e.getMessage());
         }
     }
 

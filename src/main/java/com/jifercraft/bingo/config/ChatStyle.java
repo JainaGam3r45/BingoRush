@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /** How chat shows a death or an advancement of a player in a round. */
 public enum ChatStyle {
-    /** The template from messages.yml. */
+    /** The template from the language file. */
     CUSTOM,
     /** Minecraft's own line, untouched. */
     VANILLA,
