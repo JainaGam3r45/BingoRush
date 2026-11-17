@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.GameMode;
@@ -61,5 +63,25 @@ class PendingRestoresTest {
         assertNull(restores.get(UUID.randomUUID()));
         assertTrue(file.exists());
         assertFalse(file.length() == 0);
+    }
+
+    @Test
+    void keepsAdvancementsAndReadsOldFiles(@TempDir Path tempDir) throws Exception {
+        File file = tempDir.resolve("pending-restores.json").toFile();
+        UUID old = UUID.randomUUID();
+        // Shape written by 0.2.0-pre builds, before advancements were tracked.
+        Files.writeString(file.toPath(), "{\"" + old + "\": {\"gameMode\": \"SURVIVAL\"}}");
+
+        PendingRestores restores = new PendingRestores(file, LOGGER);
+        assertEquals("SURVIVAL", restores.get(old).gameMode());
+        assertNull(restores.get(old).advancements());
+
+        UUID player = UUID.randomUUID();
+        restores.addAdvancements(player, Map.of("minecraft:story/mine_stone", List.of("get_stone")));
+        restores.close();
+
+        PendingRestores reloaded = new PendingRestores(file, LOGGER);
+        assertEquals(List.of("get_stone"), reloaded.get(player).advancements().get("minecraft:story/mine_stone"));
+        assertEquals("SURVIVAL", reloaded.get(old).gameMode());
     }
 }

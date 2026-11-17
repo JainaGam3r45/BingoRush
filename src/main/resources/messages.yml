@@ -208,7 +208,7 @@ setup-lore-value: "<!italic><muted>»</muted> <white>Valor:</white> <value>"
 setup-lore-click: "<!italic><muted><i>Pulsa para cambiar</i></muted>"
 # Descriptions under each option of /bingo setup. <br> starts a new lore line.
 setup-mode-desc-items: "<body>Cada casilla es un objeto.<br><body>Tenlo en el inventario para marcarla."
-setup-mode-desc-advancements: "<body>Cada casilla es un logro de Minecraft.<br><body>Complétalo durante la ronda para marcarla.<br><muted>Los logros que ya tenías no cuentan."
+setup-mode-desc-advancements: "<body>Cada casilla es un logro de Minecraft.<br><body>Complétalo durante la ronda para marcarla.<br><muted>Los que ya tenías se guardan<br><muted>y vuelven al acabar la ronda."
 setup-win-desc-line: "<body>Gana el primer equipo que complete<br><body>una fila, una columna o una diagonal."
 setup-win-desc-full: "<body>Gana el primer equipo que marque<br><body>las <hl>25</hl> casillas."
 setup-win-desc-full-lockout: "<body>Con lockout gana el primer equipo<br><body>que se quede con <hl>13</hl> casillas."

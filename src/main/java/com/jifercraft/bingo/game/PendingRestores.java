@@ -9,6 +9,7 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -18,7 +19,8 @@ import org.bukkit.inventory.ItemStack;
 
 /**
  * What an offline player is owed when they log back in: the inventory a round
- * took from them and the game mode they had before being knocked out.
+ * took from them, the game mode they had before being knocked out and the
+ * advancements an advancement round set aside.
  * Players who are online when the round ends get theirs back on the spot and
  * never land here. Kept on disk, so a restart before the next login loses
  * nothing.
@@ -28,7 +30,8 @@ final class PendingRestores {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type MAP_TYPE = new TypeToken<Map<String, Entry>>() { }.getType();
 
-    record Entry(String inventory, String gameMode) {
+    // advancements is absent from files written before 0.2.0, so Gson leaves it null.
+    record Entry(String inventory, String gameMode, Map<String, List<String>> advancements) {
     }
 
     private final File file;
@@ -59,20 +62,34 @@ final class PendingRestores {
     }
 
     void addInventory(UUID playerId, ItemStack[] contents) {
-        merge(playerId, RoundStorage.encodeInventory(contents), null);
+        merge(playerId, RoundStorage.encodeInventory(contents), null, null);
     }
 
     void addGameMode(UUID playerId, GameMode mode) {
-        merge(playerId, null, mode.name());
+        merge(playerId, null, mode.name(), null);
+    }
+
+    void addAdvancements(UUID playerId, Map<String, List<String>> advancements) {
+        if (!advancements.isEmpty()) {
+            merge(playerId, null, null, advancements);
+        }
     }
 
     // What was stored first wins: a second round the player also missed must
     // not replace the inventory they had before the first one.
-    private void merge(UUID playerId, String inventory, String gameMode) {
+    private void merge(UUID playerId, String inventory, String gameMode, Map<String, List<String>> advancements) {
         Entry old = pending.get(playerId);
+        Map<String, List<String>> mergedAdvancements = new HashMap<>();
+        if (advancements != null) {
+            mergedAdvancements.putAll(advancements);
+        }
+        if (old != null && old.advancements() != null) {
+            mergedAdvancements.putAll(old.advancements());
+        }
         pending.put(playerId, new Entry(
                 old != null && old.inventory() != null ? old.inventory() : inventory,
-                old != null && old.gameMode() != null ? old.gameMode() : gameMode));
+                old != null && old.gameMode() != null ? old.gameMode() : gameMode,
+                mergedAdvancements.isEmpty() ? null : mergedAdvancements));
         save();
     }
 
@@ -96,6 +113,9 @@ final class PendingRestores {
                 logger.warning("Unknown game mode " + entry.gameMode() + " for " + player.getName());
             }
         }
+        if (entry.advancements() != null) {
+            OwnedAdvancements.award(player, entry.advancements());
+        }
         save();
     }
 
@@ -108,10 +128,10 @@ final class PendingRestores {
         if (entry == null || entry.gameMode() == null) {
             return;
         }
-        if (entry.inventory() == null) {
+        if (entry.inventory() == null && entry.advancements() == null) {
             pending.remove(player.getUniqueId());
         } else {
-            pending.put(player.getUniqueId(), new Entry(entry.inventory(), null));
+            pending.put(player.getUniqueId(), new Entry(entry.inventory(), null, entry.advancements()));
         }
         try {
             player.setGameMode(GameMode.valueOf(entry.gameMode()));

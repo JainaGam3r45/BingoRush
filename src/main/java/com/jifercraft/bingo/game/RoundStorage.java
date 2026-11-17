@@ -53,7 +53,8 @@ public final class RoundStorage {
             // and Gson leaves them at 0 and null.
             int lives,
             Map<String, Integer> deaths,
-            Map<String, String> savedGameModes
+            Map<String, String> savedGameModes,
+            Map<String, Map<String, List<String>>> revokedAdvancements
     ) {
     }
 
@@ -62,7 +63,8 @@ public final class RoundStorage {
             long timeLimitSeconds,
             Map<UUID, ItemStack[]> savedInventories,
             Round.State originalState,
-            Map<UUID, GameMode> savedGameModes
+            Map<UUID, GameMode> savedGameModes,
+            Map<UUID, Map<String, List<String>>> revokedAdvancements
     ) {
     }
 
@@ -79,7 +81,12 @@ public final class RoundStorage {
 
     public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
             Map<UUID, GameMode> savedGameModes) {
-        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes));
+        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes, Map.of()));
+    }
+
+    public static void save(File file, Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
+            Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements) {
+        write(file, toJson(round, timeLimitSeconds, savedInventories, savedGameModes, revokedAdvancements));
     }
 
     /**
@@ -88,7 +95,7 @@ public final class RoundStorage {
      * anywhere.
      */
     public static String toJson(Round round, long timeLimitSeconds, Map<UUID, ItemStack[]> savedInventories,
-            Map<UUID, GameMode> savedGameModes) {
+            Map<UUID, GameMode> savedGameModes, Map<String, Map<String, List<String>>> revokedAdvancements) {
         Map<String, Integer> deaths = new HashMap<>();
         round.deaths().forEach((id, count) -> deaths.put(id.toString(), count));
         Map<String, String> gameModes = new HashMap<>();
@@ -124,7 +131,8 @@ public final class RoundStorage {
                 encodedInventories,
                 round.lives(),
                 deaths,
-                gameModes
+                gameModes,
+                revokedAdvancements
         );
 
         return GSON.toJson(data);
@@ -206,7 +214,16 @@ public final class RoundStorage {
 
             Round.State originalState = Round.State.valueOf(data.state());
             Map<UUID, GameMode> gameModes = parseIds(data.savedGameModes(), GameMode::valueOf);
-            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState, gameModes);
+            Map<UUID, Map<String, List<String>>> revoked = new HashMap<>();
+            if (data.revokedAdvancements() != null) {
+                data.revokedAdvancements().forEach((id, owed) -> {
+                    try {
+                        revoked.put(UUID.fromString(id), owed);
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                });
+            }
+            return new RestoredRound(round, data.timeLimitSeconds(), inventories, originalState, gameModes, revoked);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load round state from " + file.getPath(), e);
         }

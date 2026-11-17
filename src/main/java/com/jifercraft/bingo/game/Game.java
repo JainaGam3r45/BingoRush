@@ -67,6 +67,9 @@ public final class Game {
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
     private final CardAdvancements cardAdvancements;
+    private final OwnedAdvancements ownedAdvancements = new OwnedAdvancements();
+    // True while advancements are handed back; see awardQuietly.
+    private boolean restoringAdvancements;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     // Game mode each knocked out player had before turning spectator.
     private final Map<UUID, GameMode> savedGameModes = new HashMap<>();
@@ -396,6 +399,7 @@ public final class Game {
             giveCardItem(player);
             hud.playerJoined(player);
             cardAdvancements.sync(player, current, target);
+            revokeOwnedAdvancements(player, target);
         }
     }
 
@@ -412,6 +416,8 @@ public final class Game {
             hud.playerLeft(player);
             removeCardItems(player);
             cardAdvancements.clear(player);
+            Map<String, List<String>> owed = ownedAdvancements.take(player.getUniqueId());
+            awardQuietly(() -> OwnedAdvancements.award(player, owed));
         }
     }
 
@@ -666,11 +672,14 @@ public final class Game {
                 giveCardItem(player);
             } else {
                 restoreInventory(player);
-                pendingRestores.applyTo(player);
+                awardQuietly(() -> pendingRestores.applyTo(player));
+            }
+            if (team != null) {
+                revokeOwnedAdvancements(player, team);
             }
         } else {
             restoreInventory(player);
-            pendingRestores.applyTo(player);
+            awardQuietly(() -> pendingRestores.applyTo(player));
         }
     }
 
@@ -739,7 +748,8 @@ public final class Game {
         roundWriter.close();
         if (round != null) {
             try {
-                RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories, savedGameModes);
+                RoundStorage.save(activeRoundFile, round, roundTimeLimit, savedInventories, savedGameModes,
+                        ownedAdvancements.snapshot());
             } catch (RuntimeException e) {
                 plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             }
@@ -816,6 +826,14 @@ public final class Game {
             broadcast("round-cleared-inventories");
         }
         giveCardItems();
+        for (Team team : teams.all()) {
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null) {
+                    revokeOwnedAdvancements(member, team);
+                }
+            }
+        }
         if (roundConfig.scatterPlayers()) {
             scatterTeams();
         }
@@ -879,6 +897,7 @@ public final class Game {
         hud.hideAll();
         restoreInventories();
         restoreGameModes();
+        restoreOwnedAdvancements();
         removeCardItemsFromAll();
         retireAdvancementTab();
         roundWriter.delete();
@@ -913,7 +932,8 @@ public final class Game {
         }
         String json;
         try {
-            json = RoundStorage.toJson(round, roundTimeLimit, savedInventories, savedGameModes);
+            json = RoundStorage.toJson(round, roundTimeLimit, savedInventories, savedGameModes,
+                    ownedAdvancements.snapshot());
         } catch (RuntimeException e) {
             plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
             return;
@@ -934,6 +954,7 @@ public final class Game {
             this.savedInventories.putAll(restored.savedInventories());
             this.savedGameModes.clear();
             this.savedGameModes.putAll(restored.savedGameModes());
+            this.ownedAdvancements.load(restored.revokedAdvancements());
             this.roundRestoredUnfinished = true;
 
             hud.restorePaused(restored.timeLimitSeconds());
@@ -1078,6 +1099,10 @@ public final class Game {
      * claim a cell with it, and their chat line follows round-chat.advancements.
      */
     public void advancementDone(PlayerAdvancementDoneEvent event) {
+        if (restoringAdvancements) {
+            event.message(null);
+            return;
+        }
         if (cardAdvancements.isOurs(event.getAdvancement())) {
             return;
         }
@@ -1242,7 +1267,7 @@ public final class Game {
         Round current = round;
         if (current == null) {
             // The round ended while this player was on the death screen.
-            pendingRestores.applyTo(player);
+            awardQuietly(() -> pendingRestores.applyTo(player));
             return;
         }
         if (teams.of(player.getUniqueId()) == null) {
@@ -1409,6 +1434,41 @@ public final class Game {
             }
         }
         savedInventories.clear();
+    }
+
+    // Only advancement rounds, and only once the round runs: during the
+    // countdown nobody can claim anything yet.
+    private void revokeOwnedAdvancements(Player player, Team team) {
+        Round current = round;
+        if (current == null || current.mode() != BingoGameMode.ADVANCEMENTS
+                || current.state() == Round.State.COUNTDOWN) {
+            return;
+        }
+        ownedAdvancements.revoke(player, current, team);
+    }
+
+    private void restoreOwnedAdvancements() {
+        for (UUID playerId : ownedAdvancements.players()) {
+            Map<String, List<String>> owed = ownedAdvancements.take(playerId);
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && !player.isDead()) {
+                awardQuietly(() -> OwnedAdvancements.award(player, owed));
+            } else {
+                pendingRestores.addAdvancements(playerId, owed);
+            }
+        }
+    }
+
+    // Handing an advancement back fires PlayerAdvancementDoneEvent like any
+    // award: without the guard it would claim a cell and print the vanilla
+    // line for something the player earned long ago.
+    private void awardQuietly(Runnable award) {
+        restoringAdvancements = true;
+        try {
+            award.run();
+        } finally {
+            restoringAdvancements = false;
+        }
     }
 
     private void restoreGameModes() {

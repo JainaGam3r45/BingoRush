@@ -304,4 +304,20 @@ class RoundStorageTest {
         assertTrue(restored.savedGameModes().isEmpty());
         assertEquals(Round.State.RUNNING, restored.originalState());
     }
+
+    @Test
+    void setAsideAdvancementsSurviveARestart(@TempDir Path tempDir) {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "minecraft:story/item_" + i).toList();
+        Round round = new Round(3L, BingoGameMode.ADVANCEMENTS, new BingoCard(3L, items), new ClaimBoard(WinMode.LINE));
+        UUID player = UUID.randomUUID();
+        Map<String, Map<String, List<String>>> revoked = Map.of(
+                player.toString(), Map.of("minecraft:adventure/adventuring_time", List.of("minecraft:desert", "minecraft:taiga")));
+
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+        RoundStorage.save(saveFile, round, 0L, Map.of(), Map.of(), revoked);
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        assertEquals(List.of("minecraft:desert", "minecraft:taiga"),
+                restored.revokedAdvancements().get(player).get("minecraft:adventure/adventuring_time"));
+    }
 }
