@@ -1,6 +1,5 @@
 package com.jifercraft.bingo.updater;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -32,7 +31,7 @@ public final class UpdateChecker implements Listener {
 
     private static final String GITHUB_REPO = "JainaGam3r45/BingoRush";
     private static final String RELEASES_API = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
-    private static final String TAGS_API = "https://api.github.com/repos/" + GITHUB_REPO + "/tags";
+    private static final String TAGS_API = "https://api.github.com/repos/" + GITHUB_REPO + "/tags?per_page=100";
     private static final String RELEASES_URL = "https://github.com/" + GITHUB_REPO + "/releases";
 
     private final BingoRush plugin;
@@ -145,23 +144,31 @@ public final class UpdateChecker implements Listener {
         }
     }
 
-    private CheckResult handleTagsJson(String body) {
+    CheckResult handleTagsJson(String body) {
         try {
             JsonElement root = JsonParser.parseString(body);
             if (!root.isJsonArray()) {
                 return CheckResult.ERROR;
             }
-            JsonArray tags = root.getAsJsonArray();
-            if (tags.isEmpty()) {
+            // GitHub does not promise any order for this list, so take the highest version.
+            String bestTag = null;
+            Version best = null;
+            for (JsonElement element : root.getAsJsonArray()) {
+                if (!element.isJsonObject() || !element.getAsJsonObject().has("name")) {
+                    continue;
+                }
+                String tagName = element.getAsJsonObject().get("name").getAsString();
+                Version version = Version.parse(tagName);
+                if (best == null || version.isNewerThan(best)) {
+                    best = version;
+                    bestTag = tagName;
+                }
+            }
+            if (bestTag == null) {
                 return CheckResult.NOT_FOUND;
             }
-            JsonObject first = tags.get(0).getAsJsonObject();
-            if (!first.has("name")) {
-                return CheckResult.NOT_FOUND;
-            }
-            String tagName = first.get("name").getAsString();
-            String url = "https://github.com/" + GITHUB_REPO + "/releases/tag/" + tagName;
-            return processDiscoveredVersion(tagName, url);
+            String url = "https://github.com/" + GITHUB_REPO + "/releases/tag/" + bestTag;
+            return processDiscoveredVersion(bestTag, url);
         } catch (Exception e) {
             return CheckResult.ERROR;
         }

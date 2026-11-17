@@ -1,0 +1,36 @@
+package com.jifercraft.bingo.updater;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+class UpdateCheckerTest {
+
+    @Test
+    void picksTheHighestTagWhateverTheOrder() {
+        UpdateChecker checker = new UpdateChecker(null, Version.parse("0.2.0-pre.1"));
+
+        UpdateChecker.CheckResult result = checker.handleTagsJson("""
+                [{"name":"v0.1.0-pre.1"},{"name":"v0.2.0-pre.10"},{"name":"v0.2.0-pre.2"},{"name":"v0.1.0-pre.2"}]
+                """);
+
+        assertEquals(UpdateChecker.CheckResult.UPDATE_FOUND, result);
+        assertEquals("0.2.0-pre.10", checker.latestVersion().clean());
+        assertEquals("https://github.com/JainaGam3r45/BingoRush/releases/tag/v0.2.0-pre.10", checker.downloadUrl());
+    }
+
+    @Test
+    void sameTagIsUpToDate() {
+        UpdateChecker checker = new UpdateChecker(null, Version.parse("0.2.0-pre.2"));
+
+        assertEquals(UpdateChecker.CheckResult.UP_TO_DATE,
+                checker.handleTagsJson("[{\"name\":\"v0.2.0-pre.1\"},{\"name\":\"v0.2.0-pre.2\"}]"));
+    }
+
+    @Test
+    void emptyTagListIsNotFound() {
+        UpdateChecker checker = new UpdateChecker(null, Version.parse("0.2.0-pre.2"));
+
+        assertEquals(UpdateChecker.CheckResult.NOT_FOUND, checker.handleTagsJson("[]"));
+    }
+}
