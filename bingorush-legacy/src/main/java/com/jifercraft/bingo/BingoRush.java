@@ -156,6 +156,7 @@ public final class BingoRush extends JavaPlugin {
     public void reloadSettings() {
         ConfigUpdater.update(this, "config.yml");
         reloadConfig();
+        game.cardsBeforeReload();
         messages.reload();
         game.cardTextChanged();
         loadConfigOrLog();

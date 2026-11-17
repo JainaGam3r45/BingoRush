@@ -245,6 +245,7 @@ spectate-in-team: "<prefix><err>You're playing on team <team><err>. Leave it wit
 # The physical card item handed out when the round starts.
 card-item-name: "<brand> <hl>Card</hl>"
 card-item-lore: "<body>Right-click to see your cells."
+card-locked: "<err>Your card stays with you. Move it around your inventory, it can't leave it."
 
 # Interface text.
 sidebar-title: "  <brand>  "

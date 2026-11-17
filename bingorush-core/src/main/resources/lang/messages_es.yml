@@ -242,6 +242,7 @@ spectate-in-team: "<prefix><err>Estás jugando en el equipo <team><err>. Sal de 
 # The physical card item handed out when the round starts.
 card-item-name: "<brand> <hl>Cartilla</hl>"
 card-item-lore: "<body>Clic derecho para ver tus casillas."
+card-locked: "<err>La cartilla se queda contigo. Muévela por tu inventario, no puede salir de él."
 
 # Interface text.
 sidebar-title: "  <brand>  "

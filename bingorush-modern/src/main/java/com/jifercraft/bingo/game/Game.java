@@ -41,7 +41,12 @@ import org.bukkit.advancement.Advancement;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ItemType;
@@ -68,6 +73,8 @@ public final class Game {
     private final QueuedFileWriter roundWriter;
     private final PendingRestores pendingRestores;
     private final TeamDisplay display;
+    // Last time each player was told the card stays, so a held key is not a flood.
+    private final Map<UUID, Long> cardNotice = new HashMap<>();
     private final CardAdvancements cardAdvancements;
     private final OwnedAdvancements ownedAdvancements = new OwnedAdvancements();
     // True while advancements are handed back; see awardQuietly.
@@ -726,6 +733,7 @@ public final class Game {
             } else {
                 restoreInventory(player);
                 awardQuietly(() -> pendingRestores.applyTo(player));
+                removeCardItems(player);
                 // After the pending restores, so a mode they were owed from
                 // the last round is not saved as their own.
                 BingoConfig config = plugin.bingoConfig();
@@ -744,6 +752,9 @@ public final class Game {
         } else {
             restoreInventory(player);
             awardQuietly(() -> pendingRestores.applyTo(player));
+            // A member who was offline when the round ended, with
+            // clear-inventories off, still carries the card.
+            removeCardItems(player);
         }
     }
 
@@ -765,6 +776,94 @@ public final class Game {
         }
     }
 
+    /** A click that would take the card out of its owner's inventory. */
+    public boolean blocksCardClick(Player player, InventoryClickEvent event) {
+        Inventory top = event.getInventory();
+        int raw = event.getRawSlot();
+        CardRules.Place place = raw < 0 ? CardRules.Place.OUTSIDE
+                : raw < top.getSize() ? CardRules.Place.TOP : CardRules.Place.BOTTOM;
+        CardRules.Click click = CardRules.Click.of(event.getClick().name());
+        CardRules.Content swapSource = CardRules.Content.NONE;
+        if (click == CardRules.Click.SWAP_WITH_HOTBAR) {
+            swapSource = contentOf(player.getInventory().getItem(event.getHotbarButton()));
+        } else if (click == CardRules.Click.SWAP_WITH_OFFHAND) {
+            swapSource = contentOf(player.getInventory().getItemInOffHand());
+        }
+        return CardRules.blocksClick(click, place, top.getType() != InventoryType.CRAFTING,
+                contentOf(event.getCursor()), contentOf(event.getCurrentItem()), swapSource);
+    }
+
+    /** Dragging the card over a container would leave pieces of it there. */
+    public boolean blocksCardDrag(InventoryDragEvent event) {
+        if (!isCardItem(event.getOldCursor())) {
+            return false;
+        }
+        int topSize = event.getInventory().getSize();
+        boolean touchesTop = false;
+        for (int slot : event.getRawSlots()) {
+            touchesTop |= slot < topSize;
+        }
+        return CardRules.blocksDrag(true, touchesTop);
+    }
+
+    /** Whether the card is in a hand that could hand it to an entity. */
+    public boolean holdsCard(Player player, EquipmentSlot hand) {
+        return isCardItem(player.getInventory().getItem(hand));
+    }
+
+    private CardRules.Content contentOf(ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) {
+            return CardRules.Content.NONE;
+        }
+        if (isCardItem(stack)) {
+            return CardRules.Content.CARD;
+        }
+        return CardRules.isBundle(stack.getType().name()) ? CardRules.Content.BUNDLE : CardRules.Content.OTHER;
+    }
+
+    /** One short action bar line when the card refuses to leave, at most every two seconds. */
+    public void cardLocked(Player player) {
+        long now = System.currentTimeMillis();
+        Long last = cardNotice.get(player.getUniqueId());
+        if (last != null && now - last < 2000) {
+            return;
+        }
+        cardNotice.put(player.getUniqueId(), now);
+        player.sendActionBar(messages().render("card-locked"));
+    }
+
+    // The listeners block the ways out, but creative mode, another plugin or a
+    // full inventory at the wrong moment can still lose the card. So every
+    // second each player on a team ends up with exactly one, or none when they
+    // are knocked out, and one is only given when there is a free slot.
+    private void ensureCard(Player player, Round current) {
+        if (teams.of(player.getUniqueId()) == null || player.isDead()) {
+            return;
+        }
+        if (current.isEliminated(player.getUniqueId())) {
+            removeCardItems(player);
+            return;
+        }
+        ItemStack[] contents = player.getInventory().getContents();
+        int found = 0;
+        boolean extras = false;
+        for (int i = 0; i < contents.length; i++) {
+            if (isCardItem(contents[i])) {
+                found++;
+                if (found > 1) {
+                    contents[i] = null;
+                    extras = true;
+                }
+            }
+        }
+        if (extras) {
+            player.getInventory().setContents(contents);
+        }
+        if (found == 0 && !isCardItem(player.getItemOnCursor()) && player.getInventory().firstEmpty() != -1) {
+            giveCardItem(player);
+        }
+    }
+
     private void giveCardItem(Player player) {
         removeCardItems(player);
         ItemStack card = ItemType.BOOK.createItemStack();
@@ -773,10 +872,9 @@ public final class Game {
             meta.lore(List.of(messages().render("card-item-lore")));
             meta.getPersistentDataContainer().set(cardItemTag, PersistentDataType.BYTE, (byte) 1);
         });
-        Map<Integer, ItemStack> leftover = player.getInventory().addItem(card);
-        for (ItemStack rest : leftover.values()) {
-            player.getWorld().dropItemNaturally(player.getLocation(), rest);
-        }
+        // With a full inventory nothing is dropped: a card on the ground is
+        // destroyed on purpose, and the sweep tries again once there is room.
+        player.getInventory().addItem(card);
     }
 
     private void removeCardItems(Player player) {
@@ -851,6 +949,7 @@ public final class Game {
     /** A player left the server. */
     public void playerQuit(UUID playerId) {
         menuClosed(playerId);
+        cardNotice.remove(playerId);
         display.forget(playerId);
     }
 
@@ -1091,6 +1190,7 @@ public final class Game {
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
             checkClaims(player);
+            ensureCard(player, current);
         }
     }
 

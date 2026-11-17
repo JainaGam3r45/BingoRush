@@ -9,13 +9,16 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -80,6 +83,9 @@ public final class RoundListener implements Listener {
                 || game.isTeamMenuView(event.getView())
                 || game.isSetupMenuView(event.getView())) {
             event.setCancelled(true);
+        } else if (game.blocksCardDrag(event) && event.getWhoClicked() instanceof Player player) {
+            event.setCancelled(true);
+            game.cardLocked(player);
         }
     }
 
@@ -139,7 +145,35 @@ public final class RoundListener implements Listener {
     /** The card item cannot be moved into chests or around the inventory. */
     @EventHandler
     public void onCardClick(InventoryClickEvent event) {
-        if (event.getCurrentItem() != null && game.isCardItem(event.getCurrentItem())) {
+        if (event.getWhoClicked() instanceof Player player && game.blocksCardClick(player, event)) {
+            event.setCancelled(true);
+            game.cardLocked(player);
+        }
+    }
+
+    /** An item frame, armor stand or allay would take the book out of the hand. */
+    @EventHandler(ignoreCancelled = true)
+    public void onCardEntityUse(PlayerInteractEntityEvent event) {
+        if (CardRules.blocksEntityUse(event.getRightClicked().getType().name())
+                && game.holdsCard(event.getPlayer(), event.getHand())) {
+            event.setCancelled(true);
+            game.cardLocked(event.getPlayer());
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCardArmorStand(PlayerArmorStandManipulateEvent event) {
+        if (game.isCardItem(event.getPlayerItem())) {
+            event.setCancelled(true);
+            game.cardLocked(event.getPlayer());
+        }
+    }
+
+    // However a card ends up as an item on the ground, a death included, it
+    // is not kept; its owner gets another one.
+    @EventHandler(ignoreCancelled = true)
+    public void onCardSpawn(ItemSpawnEvent event) {
+        if (game.isCardItem(event.getEntity().getItemStack())) {
             event.setCancelled(true);
         }
     }
@@ -149,6 +183,7 @@ public final class RoundListener implements Listener {
     public void onCardDrop(PlayerDropItemEvent event) {
         if (game.isCardItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
+            game.cardLocked(event.getPlayer());
         }
     }
 
