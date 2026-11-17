@@ -155,7 +155,7 @@ public final class ConfigUpdater {
                 builder.append(" ".repeat(spaces)).append(identifier).append(": ");
                 Object value = folderConfig.get(path.toString());
                 if (value instanceof String str) {
-                    builder.append("\"").append(str.replace("\"", "\\\"")).append("\"\n");
+                    builder.append(quote(str)).append("\n");
                 } else {
                     builder.append(value).append("\n");
                 }
@@ -190,13 +190,13 @@ public final class ConfigUpdater {
                                 }
                                 Object val = entry.getValue();
                                 if (val instanceof String s) {
-                                    builder.append("\"").append(s.replace("\"", "\\\"")).append("\"\n");
+                                    builder.append(quote(s)).append("\n");
                                 } else {
                                     builder.append(val).append("\n");
                                 }
                             }
                         } else if (item instanceof String s) {
-                            builder.append(" ".repeat(spaces + 2)).append("- \"").append(s.replace("\"", "\\\"")).append("\"\n");
+                            builder.append(" ".repeat(spaces + 2)).append("- ").append(quote(s)).append("\n");
                         } else {
                             builder.append(" ".repeat(spaces + 2)).append("- ").append(item).append("\n");
                         }
@@ -209,6 +209,27 @@ public final class ConfigUpdater {
         }
 
         return builder.toString();
+    }
+
+    /**
+     * A YAML double-quoted scalar. A raw line break inside the quotes folds
+     * into a space on the next load, so the pagination line in messages.yml
+     * lost its line break after one rewrite.
+     */
+    static String quote(String value) {
+        StringBuilder out = new StringBuilder(value.length() + 2).append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\' -> out.append("\\\\");
+                case '"' -> out.append("\\\"");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> out.append(c);
+            }
+        }
+        return out.append('"').toString();
     }
 
     private static boolean isComment(String s) {

@@ -1,0 +1,155 @@
+# BingoRush messages.
+# Everything a player reads lives here, in MiniMessage. The palette below is
+# the only place colors are defined: change those hex values and the whole
+# plugin follows. Text a player controls (their name, a team name) arrives
+# unparsed, so it cannot inject tags.
+
+palette:
+  body: "#FFF3D6"
+  hl: "#FFC233"
+  ok: "#6BE585"
+  err: "#FF6B6B"
+  errval: "#FF2E2E"
+  muted: "#8C8C8C"
+
+brand: "<gradient:#FFD23F:#FF8A1F><b>BingoRush</b></gradient>"
+prefix: "<brand> <muted>»</muted> "
+
+# The header and one entry per command; the tree in BingoCommand decides who
+# sees which. <command> is the syntax, <description> what it does.
+help:
+  header: "<brand> <hl>Comandos"
+  join: "<white>/bingo join <hl>[equipo]</hl></white> <muted>|</muted> <body>Únete a un equipo"
+  card: "<white>/bingo card</white> <muted>|</muted> <body>Abre tu cartilla"
+  card-spectator: "<white>/bingo card <hl><equipo></hl></white> <muted>|</muted> <body>Mira la cartilla de un equipo"
+  leave: "<white>/bingo leave</white> <muted>|</muted> <body>Sal de tu equipo"
+  coords: "<white>/bingo coords</white> <muted>|</muted> <body>Envía tus coordenadas a tu equipo"
+  start: "<white>/bingo start <hl>[items|advancements]</hl> <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
+  stop: "<white>/bingo stop</white> <muted>|</muted> <body>Detén la ronda"
+  pause: "<white>/bingo pause</white> <muted>|</muted> <body>Pausa la ronda"
+  resume: "<white>/bingo resume</white> <muted>|</muted> <body>Reanuda la ronda"
+  reroll: "<white>/bingo reroll</white> <muted>|</muted> <body>Prepara otra cartilla para la próxima ronda"
+  teams: "<white>/bingo teams add|remove|join|clear</white> <muted>|</muted> <body>Gestiona los equipos"
+  reload: "<white>/bingo reload</white> <muted>|</muted> <body>Recarga la configuración"
+
+no-permission: "<prefix><err>No tienes permiso para eso."
+players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
+
+# Teams.
+team-joined: "<prefix><body>Te has unido al equipo <team><body>."
+team-left: "<prefix><body>Has salido del equipo."
+team-not-in: "<prefix><err>No estás en ningún equipo. Únete con <hl>/bingo join</hl>."
+team-not-found: "<prefix><err>No existe el equipo <errval><name></errval><err>."
+team-full: "<prefix><err>El equipo <team><err> está completo."
+team-all-full: "<prefix><err>Todos los equipos están llenos."
+team-already-in: "<prefix><err>Ya estás en el equipo <team><err>. Sal de él antes de cambiarte."
+team-created: "<prefix><body>Equipo <team><body> creado."
+team-removed: "<prefix><body>Equipo <team><body> eliminado."
+team-name-taken: "<prefix><err>Ya existe un equipo llamado <errval><name></errval><err>."
+team-already-there: "<prefix><err><player><err> ya pertenece al equipo <team><err>."
+team-assigned: "<prefix><body><player><body> se ha unido al equipo <team><body>."
+team-coords: "<prefix><team> <body><player> está en <hl>X: <x>, Y: <y>, Z: <z></hl>"
+compass-no-teammate: "<muted>No hay compañeros cerca en este mundo</muted>"
+compass-tracking: "<body>Rastreando a <hl><player></hl> <muted>(<distance>m)</muted>"
+teams-locked: "<prefix><err>No puedes cambiar los equipos durante una ronda."
+team-cleared: "<prefix><body>Se han vaciado todos los equipos."
+team-list-header: "<brand> <hl>Equipos"
+team-list-entry: " <hl>➤</hl> <team> <muted>|</muted> <body><count>/<max> jugadores <join>"
+team-auto-name: "Equipo <count>"
+
+# Shown by /bingo join when several teams have room: one button per team.
+# The button and its tooltip are rendered by the plugin; <join> in the list
+# entry above is the same button.
+team-pick: "<prefix><body>Elige equipo: pulsa un botón."
+team-join-button: "<hl>[Unirse]</hl>"
+team-join-hover: "<body>Unirse al equipo <team>"
+
+# Round flow.
+round-already-running: "<prefix><err>Ya hay una ronda en marcha. Detenla con <hl>/bingo stop</hl>."
+round-not-running: "<prefix><err>No hay ninguna ronda en marcha."
+round-not-started: "<prefix><err>La ronda aún no ha empezado."
+round-already-paused: "<prefix><err>La ronda ya está en pausa."
+round-not-paused: "<prefix><err>La ronda no está en pausa."
+round-config-broken: "<prefix><err>No se puede empezar: hay errores en config.yml. Mira la consola."
+round-countdown-chat: "<prefix><body>La ronda empieza en <hl><count></hl> <body>segundos."
+round-countdown-title: "<gradient:#FFD23F:#FF8A1F><b><count></b></gradient>"
+round-started-title: "<gradient:#FFD23F:#FF8A1F><b>¡Bingo!</b></gradient>"
+round-started-subtitle: "<body>¡Corre a por los objetos de tu cartilla!"
+round-started-subtitle-advancements: "<body>¡Completa los logros de tu cartilla!"
+round-started-chat: "<prefix><body>¡La ronda ha empezado! Abre tu cartilla con <hl>/bingo card</hl>."
+round-cleared-inventories: "<prefix><body>Los inventarios se han vaciado; los recuperarás al terminar."
+round-stopped: "<prefix><body>El administrador ha detenido la ronda."
+round-paused: "<prefix><body>Ronda en pausa. La cartilla no cambia mientras tanto."
+round-resumed: "<prefix><body>La ronda continúa."
+reroll-done: "<prefix><body>Nueva cartilla preparada con la semilla <hl><seed></hl>."
+reloaded: "<prefix><body>Configuración recargada."
+round-won-title: "<gradient:#FFD23F:#FF8A1F><b>¡<team> gana!</b></gradient>"
+round-won-subtitle: "<body>Ronda ganada en <hl><time></hl>"
+round-won-chat: "<prefix><body>¡El equipo <team><body> gana la ronda en <hl><time></hl><body>!"
+round-time-up-title: "<gradient:#FF6B6B:#FF2E2E><b>¡Tiempo!</b></gradient>"
+round-time-up-chat: "<prefix><body>Se acabó el tiempo. Gana el equipo <team><body> con <hl><count></hl> <body>casillas."
+round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna casilla."
+
+# Match breakdown.
+breakdown:
+  header: "<brand> <hl>Resumen de la Partida</hl>"
+  separator: "<muted><st>                             </st></muted>"
+  ranking-entry: " <hl><pos>º</hl> <team><muted>:</muted> <hl><count></hl> <body>casillas</body>"
+  ranking-entry-singular: " <hl><pos>º</hl> <team><muted>:</muted> <hl><count></hl> <body>casilla</body>"
+  first-claim: " <muted>»</muted> <white>Primer reclamo:</white> <hl><item></hl> <body>por <team> <body>(<time>)</body>"
+  first-claim-none: " <muted>»</muted> <white>Primer reclamo:</white> <muted>Ninguno</muted>"
+  total-time: " <muted>»</muted> <white>Tiempo total:</white> <hl><time></hl>"
+
+# Claims.
+claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)</muted>"
+claim-actionbar: "<ok>+ <item></ok> <body>reclamado <muted>(<count>/<total>)</muted>"
+claim-advancement: "<prefix><body>El equipo <team><body> completó el logro <hl><advancement></hl> <muted>(<count>/<total>)</muted>"
+claim-advancement-actionbar: "<ok>+ <advancement></ok> <body>completado <muted>(<count>/<total>)</muted>"
+claim-advancement-title: "<gradient:#FFD23F:#FF8A1F><b>¡Logro conseguido!</b></gradient>"
+claim-advancement-subtitle: "<body><advancement> <muted>(<count>/<total>)</muted>"
+
+# Card menu.
+menu-title: "<brand> <hl>Cartilla</hl>"
+menu-title-spectator: "<brand> <hl>Cartilla - <team></hl>"
+card-opened: "<prefix><body>Aquí tienes tu cartilla."
+card-opened-spectator: "<prefix><body>Viendo la cartilla del equipo <team><body>."
+card-not-playing: "<prefix><err>No estás jugando esta ronda. Únete con <hl>/bingo join</hl>."
+menu-cell-name: "<!italic><gradient:#FFD23F:#FF8A1F><b><item></b></gradient>"
+menu-cell-advancement-desc: "<!italic><muted><description></muted>"
+menu-cell-separator: "<!italic><muted><st>                             </st></muted>"
+menu-cell-difficulty: "<!italic><muted>»</muted> <white>Dificultad:</white> <tier>"
+tier-easy: "<ok>Fácil</ok>"
+tier-medium: "<hl>Medio</hl>"
+tier-hard: "<color:#FF8A1F>Difícil</color>"
+tier-epic: "<color:#FF55FF>Épico</color>"
+menu-status-available: "<!italic><muted>»</muted> <white>Estado:</white> <ok>Disponible</ok>"
+menu-status-available-hint: "<!italic><muted><i>Consigue este ítem para tu equipo</i></muted>"
+menu-status-available-hint-advancement: "<!italic><muted><i>Completa este logro para tu equipo</i></muted>"
+menu-status-own: "<!italic><muted>»</muted> <white>Estado:</white> <ok>✔ Conseguido</ok>"
+menu-status-own-by: "<!italic><muted>»</muted> <white>Por:</white> <team>"
+menu-status-own-time: "<!italic><muted>»</muted> <white>Hora:</white> <hl><time></hl>"
+menu-status-rival: "<!italic><muted>»</muted> <white>Estado:</white> <err>Reclamado por <team></err>"
+menu-cell-tier: "<muted>Nivel:</muted> <hl><tier></hl>"
+menu-cell-unclaimed: "<muted>Sin reclamar</muted>"
+menu-claimed-by: "<body>Conseguida por <team>"
+menu-claimed-at: "<muted>a las <time>"
+
+# Spectators.
+late-join-spectate: "<prefix><body>La ronda ya empezó: la miras como espectador. Cuando acabe podrás jugar."
+
+# The physical card item handed out when the round starts.
+card-item-name: "<brand> <hl>Cartilla</hl>"
+card-item-lore: "<body>Clic derecho para ver tus casillas."
+
+# Interface text.
+sidebar-title: "  <brand>  "
+sidebar-separator: "<muted><st>                   </st></muted>"
+sidebar-time: "<white>Tiempo:</white> <hl><time></hl>"
+sidebar-teams-header: "<white><b>Equipos:</b></white>"
+sidebar-team-entry: "<color>❙</color> <team>: <white><count>/<total></white>"
+sidebar-footer: "<muted>jifercraft.com</muted>"
+bossbar-title: "<brand> <body>Quedan <hl><time></hl>"
+
+# Updates.
+update-available: "<prefix><body>Hay una nueva versión disponible: <ok>v<latest></ok> <body>(actual: <muted>v<current></muted>). Descárgala en <hl><click:open_url:'<url>'><url></click></hl>"
+

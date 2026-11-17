@@ -1,6 +1,7 @@
 package com.jifercraft.bingo.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
@@ -12,7 +13,7 @@ import java.util.Map;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
-/** Upgrades the config.yml shipped with 0.2.0-pre.1 against the current template. */
+/** Upgrades the files shipped with 0.2.0-pre.1 against the current templates. */
 class ConfigUpgradeTest {
 
     private static List<String> lines(String resource) throws Exception {
@@ -25,6 +26,13 @@ class ConfigUpgradeTest {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.loadFromString(String.join("\n", lines));
         return yaml;
+    }
+
+    private static String upgrade(String template, String old) throws Exception {
+        List<String> templateLines = lines(template);
+        YamlConfiguration folder = yaml(lines(old));
+        ConfigUpdater.mergeMissing(yaml(templateLines), folder);
+        return ConfigUpdater.buildUpdatedContent(templateLines, folder);
     }
 
     @Test
@@ -46,16 +54,44 @@ class ConfigUpgradeTest {
     }
 
     @Test
-    void upgradeOutputLoadsAsAValidConfig() throws Exception {
-        List<String> template = lines("/config.yml");
-        YamlConfiguration folder = yaml(lines("/config-0.2.0-pre.1.yml"));
-        ConfigUpdater.mergeMissing(yaml(template), folder);
+    void upgradeIsStable() throws Exception {
+        for (String[] pair : new String[][]{
+                {"/config.yml", "/config-0.2.0-pre.1.yml"},
+                {"/messages.yml", "/messages-0.2.0-pre.1.yml"}}) {
+            List<String> template = lines(pair[0]);
+            String upgraded = upgrade(pair[0], pair[1]);
 
-        String upgraded = ConfigUpdater.buildUpdatedContent(template, folder);
+            // Running the upgrade again on its own output must change nothing.
+            YamlConfiguration again = yaml(upgraded.lines().toList());
+            assertFalse(ConfigUpdater.mergeMissing(yaml(template), again), pair[0]);
+            assertEquals(upgraded, ConfigUpdater.buildUpdatedContent(template, again), pair[0]);
+        }
+    }
 
-        // Running the upgrade again on its own output must change nothing.
-        YamlConfiguration again = yaml(upgraded.lines().toList());
-        assertEquals(false, ConfigUpdater.mergeMissing(yaml(template), again));
-        assertEquals(upgraded, ConfigUpdater.buildUpdatedContent(template, again));
+    @Test
+    void messagesUpgradeKeepsEveryOldValue() throws Exception {
+        YamlConfiguration old = yaml(lines("/messages-0.2.0-pre.1.yml"));
+        YamlConfiguration template = yaml(lines("/messages.yml"));
+        YamlConfiguration result = yaml(upgrade("/messages.yml", "/messages-0.2.0-pre.1.yml").lines().toList());
+
+        for (String key : old.getKeys(true)) {
+            if (old.isConfigurationSection(key) || !template.contains(key)) {
+                continue;
+            }
+            assertEquals(old.get(key), result.get(key), key);
+        }
+        for (String key : template.getKeys(true)) {
+            assertTrue(result.contains(key), "missing " + key);
+            if (!old.contains(key) && !template.isConfigurationSection(key)) {
+                assertEquals(template.get(key), result.get(key), key);
+            }
+        }
+    }
+
+    @Test
+    void quoteSurvivesALoad() throws Exception {
+        String tricky = "line one\nline \"two\"\tC:\\path";
+        YamlConfiguration loaded = yaml(List.of("value: " + ConfigUpdater.quote(tricky)));
+        assertEquals(tricky, loaded.getString("value"));
     }
 }
