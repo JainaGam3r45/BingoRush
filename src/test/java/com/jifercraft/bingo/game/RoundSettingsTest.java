@@ -71,4 +71,21 @@ class RoundSettingsTest {
         RoundSettings settings = new RoundSettings(BingoGameMode.ITEMS, WinMode.FULL_CARD, true, -30);
         assertEquals(0, settings.timeLimitSeconds());
     }
+
+    @Test
+    void livesCycleThroughPresets() {
+        RoundSettings settings = new RoundSettings(BingoGameMode.ITEMS, WinMode.LINE, false, 0, 0);
+        settings.cycleLives();
+        assertEquals(1, settings.lives());
+        settings.cycleLives();
+        assertEquals(3, settings.lives());
+        settings.cycleLives();
+        assertEquals(5, settings.lives());
+        settings.cycleLives();
+        assertEquals(0, settings.lives());
+
+        RoundSettings odd = new RoundSettings(BingoGameMode.ITEMS, WinMode.LINE, false, 0, 7);
+        odd.cycleLives();
+        assertEquals(0, odd.lives());
+    }
 }
