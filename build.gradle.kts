@@ -12,10 +12,12 @@ allprojects {
 // Every server jar lands in the root build/libs, next to each other.
 val copyJars = tasks.register<Copy>("copyJars") {
     from(project(":bingorush-modern").tasks.named("shadowJar"))
+    from(project(":bingorush-legacy").tasks.named("shadowJar"))
     into(layout.buildDirectory.dir("libs"))
 }
 
 tasks.named("assemble") {
     dependsOn(project(":bingorush-modern").tasks.named("shadowJar"))
+    dependsOn(project(":bingorush-legacy").tasks.named("shadowJar"))
     finalizedBy(copyJars)
 }

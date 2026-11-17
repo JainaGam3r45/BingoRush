@@ -1,0 +1,30 @@
+name: '${name}'
+version: '${version}'
+main: com.jifercraft.bingo.BingoRush
+# 1.13 is the oldest value the field accepts; older servers ignore it.
+api-version: '1.13'
+author: JainaGam3r45
+website: https://www.jifercraft.com
+description: Bingo minigame for live events
+
+commands:
+  bingo:
+    description: Bingo minigame
+    aliases: [b]
+  card:
+    description: Opens your bingo card
+  teams:
+    description: Opens the team menu
+  setup:
+    description: Opens the round setup panel
+
+permissions:
+  bingo.play:
+    description: Lets the player open the bingo card and join a team.
+    default: true
+  bingo.admin:
+    description: Lets the player start, stop and configure bingo rounds.
+    default: op
+  bingo.update:
+    description: Receives a notification when a new version is available.
+    default: op
