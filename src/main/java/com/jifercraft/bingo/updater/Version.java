@@ -1,5 +1,6 @@
 package com.jifercraft.bingo.updater;
 
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -95,7 +96,34 @@ public final class Version implements Comparable<Version> {
         if (!preRelease.isEmpty() && other.preRelease.isEmpty()) {
             return -1;
         }
-        return preRelease.compareToIgnoreCase(other.preRelease);
+        return comparePreRelease(preRelease, other.preRelease);
+    }
+
+    // Plain string order puts pre.10 before pre.2, so dot-separated parts are
+    // compared one by one: numbers as numbers, and numbers before words.
+    private static int comparePreRelease(String a, String b) {
+        String[] left = a.split("\\.");
+        String[] right = b.split("\\.");
+        for (int i = 0; i < Math.min(left.length, right.length); i++) {
+            boolean leftNumeric = isNumeric(left[i]);
+            boolean rightNumeric = isNumeric(right[i]);
+            int result;
+            if (leftNumeric && rightNumeric) {
+                result = new BigInteger(left[i]).compareTo(new BigInteger(right[i]));
+            } else if (leftNumeric != rightNumeric) {
+                result = leftNumeric ? -1 : 1;
+            } else {
+                result = left[i].compareToIgnoreCase(right[i]);
+            }
+            if (result != 0) {
+                return result;
+            }
+        }
+        return Integer.compare(left.length, right.length);
+    }
+
+    private static boolean isNumeric(String part) {
+        return !part.isEmpty() && part.chars().allMatch(Character::isDigit);
     }
 
     @Override

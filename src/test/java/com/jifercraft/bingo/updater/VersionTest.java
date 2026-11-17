@@ -50,6 +50,21 @@ class VersionTest {
     }
 
     @Test
+    void stableReleaseIsNewerThanItsPreviews() {
+        assertTrue(Version.parse("v0.2.0").isNewerThan(Version.parse("0.2.0-pre.2")));
+        assertTrue(Version.parse("v0.2.0-pre.2").isNewerThan(Version.parse("0.2.0-pre.1")));
+        assertFalse(Version.parse("v0.2.0-pre.2").isNewerThan(Version.parse("0.2.0-pre.2")));
+    }
+
+    @Test
+    void comparesPreReleaseNumbersAsNumbers() {
+        assertTrue(Version.parse("0.2.0-pre.10").isNewerThan(Version.parse("0.2.0-pre.2")));
+        assertTrue(Version.parse("1.0.0-rc.1").isNewerThan(Version.parse("1.0.0-beta.11")));
+        assertTrue(Version.parse("1.0.0-alpha.1").isNewerThan(Version.parse("1.0.0-alpha")));
+        assertTrue(Version.parse("1.0.0-alpha.beta").isNewerThan(Version.parse("1.0.0-alpha.1")));
+    }
+
+    @Test
     void ignoresBuildMetadata() {
         assertEquals(0, Version.parse("1.0.0+build12").compareTo(Version.parse("1.0.0+build99")));
     }
