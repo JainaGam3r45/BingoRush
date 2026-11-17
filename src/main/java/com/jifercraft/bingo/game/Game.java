@@ -8,6 +8,7 @@ import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
+import java.io.File;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -49,15 +50,18 @@ public final class Game {
     private final NamespacedKey cardTag;
     private final NamespacedKey cardItemTag;
     private final Hud hud;
+    private final File activeRoundFile;
     private final Map<UUID, ItemStack[]> savedInventories = new HashMap<>();
     private BukkitTask countdownTask;
     private BukkitTask clockTask;
     private BukkitTask sweepTask;
+    private BukkitTask autosaveTask;
     // From /bingo reroll: the seed the next start uses unless one is given.
     private Long pendingSeed;
     private Round round;
     private BingoConfig roundConfig;
     private int secondsLeft;
+    private boolean roundRestoredUnfinished;
 
     public Game(BingoRush plugin, Teams teams) {
         this.plugin = plugin;
@@ -66,6 +70,7 @@ public final class Game {
         this.cardItemTag = new NamespacedKey(plugin, "card-item");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
         this.hud = new Hud(plugin, this);
+        this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
     }
 
     public Round round() {
@@ -189,6 +194,7 @@ public final class Game {
                 cancelClock();
                 hud.pause();
                 broadcast("round-paused");
+                saveActiveRound();
             }
         }
     }
@@ -204,8 +210,18 @@ public final class Game {
         }
         round.resume();
         hud.resume();
-        clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
+        roundRestoredUnfinished = false;
+        if (clockTask == null) {
+            clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
+        }
+        if (sweepTask == null) {
+            sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::sweepClaims, 20, 20);
+        }
+        if (autosaveTask == null) {
+            autosaveTask = Bukkit.getScheduler().runTaskTimer(plugin, this::autosave, 600, 600);
+        }
         broadcast("round-resumed");
+        saveActiveRound();
     }
 
     public void rerollCard(CommandSender caller) {
@@ -497,6 +513,28 @@ public final class Game {
         }
     }
 
+    /**
+     * Handles a connecting player. Notifies admins of restored rounds, ensures
+     * participating team members have their card item and HUD, or returns items
+     * to players without an active round.
+     */
+    public void playerJoined(Player player) {
+        if (roundRestoredUnfinished && player.hasPermission("bingo.admin")) {
+            messages().send(player, "round-restored-admin");
+        }
+        if (round != null) {
+            Team team = teams.of(player.getUniqueId());
+            if (team != null) {
+                hud.playerJoined(player);
+                giveCardItem(player);
+            } else {
+                restoreInventory(player);
+            }
+        } else {
+            restoreInventory(player);
+        }
+    }
+
     /** True when the stack is the physical card item. */
     public boolean isCardItem(ItemStack stack) {
         return stack != null && stack.hasItemMeta()
@@ -557,10 +595,15 @@ public final class Game {
 
     /** Undoes everything a running round did, for the plugin shutting down. */
     public void shutdown() {
+        if (round != null) {
+            saveActiveRound();
+        }
         cancelTasks();
         cardMenu.closeAll();
         hud.hideAll();
-        restoreInventories();
+        if (round == null) {
+            restoreInventories();
+        }
         removeCardItemsFromAll();
         round = null;
         roundConfig = null;
@@ -626,6 +669,8 @@ public final class Game {
         // The events catch most claims, but /give and friends fire nothing,
         // so every second the plugin looks at every team member's inventory.
         sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::sweepClaims, 20, 20);
+        autosaveTask = Bukkit.getScheduler().runTaskTimer(plugin, this::autosave, 600, 600);
+        saveActiveRound();
     }
 
     private void tickClock() {
@@ -672,6 +717,8 @@ public final class Game {
         hud.hideAll();
         restoreInventories();
         removeCardItemsFromAll();
+        RoundStorage.delete(activeRoundFile);
+        roundRestoredUnfinished = false;
         round = null;
         roundConfig = null;
     }
@@ -680,6 +727,68 @@ public final class Game {
         cancelCountdown();
         cancelClock();
         cancelSweep();
+        cancelAutosave();
+    }
+
+    private void cancelAutosave() {
+        if (autosaveTask != null) {
+            autosaveTask.cancel();
+            autosaveTask = null;
+        }
+    }
+
+    private void autosave() {
+        if (round != null && round.state() == Round.State.RUNNING) {
+            saveActiveRound();
+        }
+    }
+
+    public void saveActiveRound() {
+        if (round == null) {
+            return;
+        }
+        long limit = roundConfig != null ? roundConfig.timeLimitSeconds() : 0;
+        try {
+            RoundStorage.save(activeRoundFile, round, limit, savedInventories);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Could not save active round state: " + e.getMessage());
+        }
+    }
+
+    public void loadSavedRoundIfPresent() {
+        if (!RoundStorage.exists(activeRoundFile)) {
+            return;
+        }
+        try {
+            RoundStorage.RestoredRound restored = RoundStorage.load(activeRoundFile);
+            this.round = restored.round();
+            this.roundConfig = plugin.bingoConfig();
+            this.savedInventories.clear();
+            this.savedInventories.putAll(restored.savedInventories());
+            this.roundRestoredUnfinished = true;
+
+            hud.restorePaused(restored.timeLimitSeconds());
+
+            plugin.getLogger().info("Found an unfinished round from previous session (seed "
+                    + round.seed() + "). Restored in PAUSED state.");
+
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.hasPermission("bingo.admin")) {
+                    messages().send(player, "round-restored-admin");
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to restore saved round from "
+                    + activeRoundFile.getPath() + ": " + e.getMessage());
+        }
+    }
+
+    public File activeRoundFile() {
+        return activeRoundFile;
+    }
+
+    public boolean isRoundRestoredUnfinished() {
+        return roundRestoredUnfinished;
     }
 
     private void cancelSweep() {
@@ -752,6 +861,8 @@ public final class Game {
             if (winner != null) {
                 winByCompletion(current, winner);
             }
+        } else {
+            saveActiveRound();
         }
     }
 
@@ -839,6 +950,8 @@ public final class Game {
             if (winner != null) {
                 winByCompletion(current, winner);
             }
+        } else {
+            saveActiveRound();
         }
     }
 

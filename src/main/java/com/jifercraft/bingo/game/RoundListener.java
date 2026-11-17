@@ -129,10 +129,9 @@ public final class RoundListener implements Listener {
         }
     }
 
-    /** A player who left during a round gets their saved items back. */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        game.restoreInventory(event.getPlayer());
+        game.playerJoined(event.getPlayer());
     }
 
     /** An open card menu nobody can see anymore is not refreshed. */

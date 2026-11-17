@@ -39,6 +39,17 @@ public final class Round {
         this.board = board;
     }
 
+    Round(long seed, BingoGameMode mode, BingoCard card, ClaimBoard board, State state, long elapsedMs, FirstClaim firstClaim) {
+        this.seed = seed;
+        this.mode = mode;
+        this.card = card;
+        this.board = board;
+        this.state = state;
+        this.elapsedMs = elapsedMs;
+        this.lastResumeAt = state == State.RUNNING ? System.currentTimeMillis() : 0;
+        this.firstClaim = firstClaim;
+    }
+
     public long seed() {
         return seed;
     }

@@ -94,6 +94,25 @@ public final class Hud {
         refresh();
     }
 
+    /** Reconstructs scoreboard and prepared boss bar for a restored paused round. */
+    public void restorePaused(long timeLimitSeconds) {
+        limitSeconds = timeLimitSeconds;
+        totalMs = timeLimitSeconds * 1000;
+        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+        sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY,
+                plugin.messages().render("sidebar-title"));
+        sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
+        sidebar.numberFormat(NumberFormat.blank());
+        for (Player player : participants()) {
+            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
+            player.setScoreboard(scoreboard);
+        }
+        if (timeLimitSeconds > 0) {
+            bossBar = BossBar.bossBar(Component.empty(), 1.0f, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
+        }
+        refresh();
+    }
+
     /** Once a second while the round runs: the clock everywhere it shows. */
     public void clockTick() {
         refresh();

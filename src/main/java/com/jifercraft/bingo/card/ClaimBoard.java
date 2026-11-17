@@ -2,6 +2,7 @@ package com.jifercraft.bingo.card;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -32,6 +33,28 @@ public final class ClaimBoard {
 
     public boolean isLockout() {
         return lockout;
+    }
+
+    public WinMode winMode() {
+        return mode;
+    }
+
+    public record ClaimRecord(int cell, int teamId, long timeMs) {
+    }
+
+    public List<ClaimRecord> allClaims() {
+        List<ClaimRecord> list = new ArrayList<>();
+        for (Map.Entry<Integer, TeamProgress> entry : teams.entrySet()) {
+            int teamId = entry.getKey();
+            TeamProgress progress = entry.getValue();
+            for (int cell = 0; cell < BingoCard.CELLS; cell++) {
+                if (progress.cells[cell]) {
+                    list.add(new ClaimRecord(cell, teamId, progress.times[cell]));
+                }
+            }
+        }
+        list.sort(Comparator.comparingLong(ClaimRecord::timeMs));
+        return list;
     }
 
     /** Records a claim. Returns false when the cell is unavailable or already claimed. */
