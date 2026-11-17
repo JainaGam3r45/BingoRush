@@ -1,29 +1,64 @@
 package com.jifercraft.bingo.card;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.TreeMap;
 
 /**
- * Claim progress on one card. Progress belongs to each team, so two teams can
- * hold the same cell at once. Lockout mode, where the first team to reach a
- * cell keeps it, will change that in stage 2.
+ * Claim progress on one card. Progress belongs to each team. In lockout mode,
+ * the first team to claim a cell locks it for everyone else.
  */
 public final class ClaimBoard {
 
     private final WinMode mode;
+    private final boolean lockout;
     // TreeMap keeps team order stable, which matters when two teams tie.
     private final Map<Integer, TeamProgress> teams = new TreeMap<>();
+    private final int[] owners = new int[BingoCard.CELLS];
+    private int totalClaimed;
 
     public ClaimBoard(WinMode mode) {
-        this.mode = mode;
+        this(mode, false);
     }
 
-    /** Records a claim. Returns false when the team already had the cell. */
+    public ClaimBoard(WinMode mode, boolean lockout) {
+        this.mode = mode;
+        this.lockout = lockout;
+        Arrays.fill(owners, -1);
+    }
+
+    public boolean isLockout() {
+        return lockout;
+    }
+
+    /** Records a claim. Returns false when the cell is unavailable or already claimed. */
     public boolean claim(int cell, int teamId, long timeMs) {
-        return teams.computeIfAbsent(teamId, id -> new TeamProgress()).claim(cell, timeMs, mode);
+        if (cell < 0 || cell >= BingoCard.CELLS) {
+            return false;
+        }
+        if (lockout && owners[cell] != -1) {
+            return false;
+        }
+        TeamProgress progress = teams.computeIfAbsent(teamId, id -> new TeamProgress());
+        if (!progress.claim(cell, timeMs, mode, lockout)) {
+            return false;
+        }
+        if (owners[cell] == -1) {
+            owners[cell] = teamId;
+            totalClaimed++;
+        }
+        if (lockout && mode == WinMode.FULL_CARD && totalClaimed == BingoCard.CELLS) {
+            leader().ifPresent(leadId -> {
+                TeamProgress leadProgress = teams.get(leadId);
+                if (leadProgress != null && leadProgress.completedAtMs == 0) {
+                    leadProgress.completedAtMs = timeMs;
+                }
+            });
+        }
+        return true;
     }
 
     public int count(int teamId) {
@@ -34,6 +69,14 @@ public final class ClaimBoard {
     public boolean isClaimed(int cell, int teamId) {
         TeamProgress progress = teams.get(teamId);
         return progress != null && progress.cells[cell];
+    }
+
+    /** Owner of the cell in lockout mode, or the first team that claimed it. */
+    public OptionalInt owner(int cell) {
+        if (cell < 0 || cell >= BingoCard.CELLS || owners[cell] == -1) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(owners[cell]);
     }
 
     /** When the team claimed a cell, or 0 if it never did. */
@@ -143,7 +186,7 @@ public final class ClaimBoard {
         // 0 until the team completes the win condition.
         private long completedAtMs;
 
-        boolean claim(int cell, long timeMs, WinMode mode) {
+        boolean claim(int cell, long timeMs, WinMode mode, boolean lockout) {
             if (cells[cell]) {
                 return false;
             }
@@ -151,15 +194,15 @@ public final class ClaimBoard {
             times[cell] = timeMs;
             lastClaimMs = timeMs;
             count++;
-            if (completedAtMs == 0 && isComplete(mode)) {
+            if (completedAtMs == 0 && isComplete(mode, lockout)) {
                 completedAtMs = timeMs;
             }
             return true;
         }
 
-        private boolean isComplete(WinMode mode) {
+        private boolean isComplete(WinMode mode, boolean lockout) {
             return switch (mode) {
-                case FULL_CARD -> count == BingoCard.CELLS;
+                case FULL_CARD -> lockout ? count >= (BingoCard.CELLS / 2 + 1) : count == BingoCard.CELLS;
                 case LINE -> hasLine(cells);
             };
         }

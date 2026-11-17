@@ -133,4 +133,67 @@ class ClaimBoardTest {
         assertTrue(board.claimers(3).isEmpty());
         assertFalse(board.isClaimed(3, 9));
     }
+
+    @Test
+    void secondTeamCannotClaimTakenCellInLockout() {
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD, true);
+        assertTrue(board.isLockout());
+        assertTrue(board.claim(5, 1, 100));
+        assertFalse(board.claim(5, 2, 200));
+
+        assertEquals(1, board.count(1));
+        assertEquals(0, board.count(2));
+        assertTrue(board.isClaimed(5, 1));
+        assertFalse(board.isClaimed(5, 2));
+        assertEquals(1, board.owner(5).getAsInt());
+        assertEquals(List.of(1), board.claimers(5));
+    }
+
+    @Test
+    void thirteenCellsGrantsImmediateVictoryInLockout() {
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD, true);
+        for (int cell = 0; cell < 12; cell++) {
+            assertTrue(board.claim(cell, 1, 100 + cell));
+            assertTrue(board.completedWinner().isEmpty(), "12 cells is not yet an absolute majority");
+        }
+        assertTrue(board.claim(12, 1, 200));
+        assertEquals(13, board.count(1));
+        assertTrue(board.completedWinner().isPresent());
+        assertEquals(1, board.completedWinner().getAsInt());
+    }
+
+    @Test
+    void independentClaimsOutsideLockout() {
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD, false);
+        assertFalse(board.isLockout());
+        assertTrue(board.claim(4, 1, 50));
+        assertTrue(board.claim(4, 2, 80));
+
+        assertEquals(1, board.count(1));
+        assertEquals(1, board.count(2));
+        assertTrue(board.isClaimed(4, 1));
+        assertTrue(board.isClaimed(4, 2));
+        assertEquals(1, board.owner(4).getAsInt());
+        assertEquals(List.of(1, 2), board.claimers(4));
+    }
+
+    @Test
+    void exhaustedBoardInLockoutAwardsLeader() {
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD, true);
+        // Team 1 gets 12 cells, last claim at t=150
+        for (int cell = 0; cell < 12; cell++) {
+            board.claim(cell, 1, 100 + cell);
+        }
+        // Team 2 gets 12 cells, last claim at t=300
+        for (int cell = 12; cell < 24; cell++) {
+            board.claim(cell, 2, 200 + cell);
+        }
+        assertTrue(board.completedWinner().isEmpty());
+
+        // Team 3 claims the 25th cell (cell 24)
+        board.claim(24, 3, 500);
+        assertTrue(board.completedWinner().isPresent());
+        // Team 1 wins because of earlier last claim (t=111 vs t=223)
+        assertEquals(1, board.completedWinner().getAsInt());
+    }
 }

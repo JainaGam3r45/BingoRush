@@ -3,6 +3,7 @@ package com.jifercraft.bingo.game;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.card.ClaimBoard;
@@ -45,5 +46,14 @@ class RoundTest {
 
         Round advRound = new Round(2L, BingoGameMode.ADVANCEMENTS, card, board);
         assertEquals(BingoGameMode.ADVANCEMENTS, advRound.mode());
+    }
+
+    @Test
+    void supportsLockoutBoard() {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "test:item" + i).toList();
+        BingoCard card = new BingoCard(3L, items);
+        ClaimBoard board = new ClaimBoard(WinMode.FULL_CARD, true);
+        Round round = new Round(3L, card, board);
+        assertTrue(round.board().isLockout());
     }
 }
