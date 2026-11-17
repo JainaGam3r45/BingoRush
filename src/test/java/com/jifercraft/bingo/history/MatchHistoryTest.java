@@ -191,4 +191,19 @@ class MatchHistoryTest {
         assertFalse(new File(dir, "m-1.json").exists());
         assertFalse(new File(dir, "m-2.json").exists());
     }
+
+    @Test
+    void ownThreadKeepsSavesAndClearsInOrder(@TempDir Path tempDir) {
+        File dir = tempDir.toFile();
+        MatchHistory history = new MatchHistory(dir, null);
+
+        history.recordMatch(createDummyRecord("m-1", 1000L, "Team 1"), 50);
+        history.clearHistory();
+        history.recordMatch(createDummyRecord("m-2", 2000L, "Team 2"), 50);
+        history.close();
+
+        assertFalse(new File(dir, "m-1.json").exists());
+        assertTrue(new File(dir, "m-2.json").exists());
+        assertEquals(1, history.summaries().size());
+    }
 }

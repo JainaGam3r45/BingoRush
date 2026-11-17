@@ -74,6 +74,9 @@ public final class BingoRush extends JavaPlugin {
         if (game != null) {
             game.shutdown();
         }
+        if (matchHistory != null) {
+            matchHistory.close();
+        }
         if (messages != null) {
             messages.console("Disabled");
         }

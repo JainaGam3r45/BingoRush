@@ -17,9 +17,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
-import org.bukkit.Bukkit;
 
 /**
  * Manages match history on disk and in memory. Completed matches are saved
@@ -34,23 +37,57 @@ public final class MatchHistory {
     private final File directory;
     private final BingoRush plugin;
     private final Consumer<Runnable> asyncExecutor;
+    private final ExecutorService ownExecutor;
     private final List<MatchSummary> summaries = new CopyOnWriteArrayList<>();
 
+    /**
+     * File work runs on one thread of its own, in order: the Bukkit async
+     * pool could run a history clear before a match save queued earlier, and
+     * it drops whatever is still queued when the plugin disables.
+     */
     public MatchHistory(File directory, BingoRush plugin) {
-        this(directory, plugin, task -> {
-            if (plugin != null && Bukkit.getServer() != null) {
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
-            } else {
+        this(directory, plugin, Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "BingoRush-history");
+            thread.setDaemon(true);
+            return thread;
+        }));
+    }
+
+    private MatchHistory(File directory, BingoRush plugin, ExecutorService executor) {
+        this.directory = directory;
+        this.plugin = plugin;
+        this.ownExecutor = executor;
+        this.asyncExecutor = task -> {
+            try {
+                executor.execute(task);
+            } catch (RejectedExecutionException e) {
                 task.run();
             }
-        });
+        };
+        loadSummaries();
     }
 
     public MatchHistory(File directory, BingoRush plugin, Consumer<Runnable> asyncExecutor) {
         this.directory = directory;
         this.plugin = plugin;
+        this.ownExecutor = null;
         this.asyncExecutor = asyncExecutor;
         loadSummaries();
+    }
+
+    /** Waits for queued saves, for the plugin shutting down. */
+    public void close() {
+        if (ownExecutor == null) {
+            return;
+        }
+        ownExecutor.shutdown();
+        try {
+            if (!ownExecutor.awaitTermination(10, TimeUnit.SECONDS) && plugin != null) {
+                plugin.getLogger().warning("Match history writes did not finish within 10 seconds");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public File directory() {
