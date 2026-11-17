@@ -4,9 +4,11 @@ import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.card.CardGenerator;
 import com.jifercraft.bingo.card.ClaimBoard;
+import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -18,10 +20,13 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.advancement.Advancement;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryView;
@@ -88,11 +93,31 @@ public final class Game {
             messages().send(player, "card-not-playing");
             return;
         }
-        cardMenu.open(player, current, team);
+        cardMenu.open(player, current, team, false);
         messages().send(player, "card-opened");
     }
 
+    /** Opens a team card from that team's perspective for spectators and casters. */
+    public void openCardSpectator(Player player, String teamName) {
+        Round current = round;
+        if (current == null) {
+            messages().send(player, "round-not-running");
+            return;
+        }
+        Team target = teams.byName(teamName);
+        if (target == null) {
+            messages().send(player, "team-not-found", Placeholder.unparsed("name", teamName));
+            return;
+        }
+        cardMenu.open(player, current, target, true);
+        messages().send(player, "card-opened-spectator", teamPlaceholder(target));
+    }
+
     public void startRound(CommandSender caller, String seedArg) {
+        startRound(caller, null, seedArg);
+    }
+
+    public void startRound(CommandSender caller, BingoGameMode modeOverride, String seedArg) {
         if (round != null) {
             messages().send(caller, "round-already-running");
             return;
@@ -102,19 +127,27 @@ public final class Game {
             messages().send(caller, "round-config-broken");
             return;
         }
+        BingoGameMode mode = modeOverride != null ? modeOverride : config.gameMode();
         long seed = seedArg != null && !seedArg.isBlank()
                 ? CardGenerator.seedFrom(seedArg)
                 : nextSeed();
+        ItemPool pool = mode == BingoGameMode.ADVANCEMENTS ? config.advancementPool() : config.itemPool();
+        if (pool == null) {
+            plugin.getLogger().severe("The " + (mode == BingoGameMode.ADVANCEMENTS ? "advancement" : "item")
+                    + " pool is not configured");
+            messages().send(caller, "round-config-broken");
+            return;
+        }
         BingoCard card;
         try {
-            card = new CardGenerator(config.pool()).generate(seed);
+            card = new CardGenerator(pool).generate(seed);
         } catch (IllegalArgumentException e) {
             plugin.getLogger().severe("The card could not be generated: " + e.getMessage());
             messages().send(caller, "round-config-broken");
             return;
         }
         roundConfig = config;
-        round = new Round(seed, card, new ClaimBoard(config.winMode()));
+        round = new Round(seed, mode, card, new ClaimBoard(config.winMode()));
         int total = config.countdownSeconds();
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
@@ -243,6 +276,81 @@ public final class Game {
         }
     }
 
+    public void shareCoordinates(Player player) {
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            messages().send(player, "team-not-in");
+            return;
+        }
+        Location loc = player.getLocation();
+        TagResolver x = Placeholder.unparsed("x", String.valueOf(loc.getBlockX()));
+        TagResolver y = Placeholder.unparsed("y", String.valueOf(loc.getBlockY()));
+        TagResolver z = Placeholder.unparsed("z", String.valueOf(loc.getBlockZ()));
+        TagResolver playerTag = Placeholder.unparsed("player", player.getName());
+        TagResolver teamTag = teamPlaceholder(team);
+        for (UUID memberId : team.members()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null) {
+                messages().send(member, "team-coords", teamTag, playerTag, x, y, z);
+            }
+        }
+    }
+
+    public void pointCompass(Player player, boolean sendFeedback) {
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            if (sendFeedback) {
+                messages().send(player, "team-not-in");
+            }
+            return;
+        }
+        Player nearest = findNearestTeammate(player, team);
+        if (nearest == null) {
+            if (sendFeedback) {
+                player.sendActionBar(messages().render("compass-no-teammate"));
+            }
+            return;
+        }
+        player.setCompassTarget(nearest.getLocation());
+        if (sendFeedback) {
+            int distance = (int) Math.round(player.getLocation().distance(nearest.getLocation()));
+            player.sendActionBar(messages().render("compass-tracking",
+                    Placeholder.unparsed("player", nearest.getName()),
+                    Placeholder.unparsed("distance", String.valueOf(distance))));
+        }
+    }
+
+    public Player findNearestTeammate(Player player, Team team) {
+        Player nearest = null;
+        double bestDistanceSq = Double.MAX_VALUE;
+        Location loc = player.getLocation();
+        World world = loc.getWorld();
+        for (UUID memberId : team.members()) {
+            if (memberId.equals(player.getUniqueId())) {
+                continue;
+            }
+            Player teammate = Bukkit.getPlayer(memberId);
+            if (teammate == null || !teammate.isOnline() || !teammate.getWorld().equals(world)) {
+                continue;
+            }
+            double distSq = loc.distanceSquared(teammate.getLocation());
+            if (distSq < bestDistanceSq) {
+                bestDistanceSq = distSq;
+                nearest = teammate;
+            }
+        }
+        return nearest;
+    }
+
+    public boolean isHoldingCompass(Player player) {
+        ItemStack main = player.getInventory().getItemInMainHand();
+        if (main.getType() == Material.COMPASS) {
+            return true;
+        }
+        ItemStack off = player.getInventory().getItemInOffHand();
+        return off.getType() == Material.COMPASS;
+    }
+
     public void createTeam(CommandSender caller, String name, TextColor color) {
         try {
             Team team = teams.create(name, color);
@@ -353,7 +461,7 @@ public final class Game {
      */
     public void checkClaims(Player player) {
         Round current = round;
-        if (current == null || current.state() != Round.State.RUNNING) {
+        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ITEMS) {
             return;
         }
         Team team = teams.of(player.getUniqueId());
@@ -505,7 +613,8 @@ public final class Game {
             scatterTeams();
         }
         broadcast("round-started-chat");
-        plugin.getLogger().info("Round started, seed " + round.seed());
+        plugin.getLogger().info("Round started (" + round.mode().name().toLowerCase(Locale.ROOT)
+                + "), seed " + round.seed());
         hud.roundStarted(roundConfig.timeLimitSeconds());
         clockTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickClock, 20, 20);
         // The events catch most claims, but /give and friends fire nothing,
@@ -519,6 +628,11 @@ public final class Game {
             return;
         }
         hud.clockTick();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (isHoldingCompass(player)) {
+                pointCompass(player, false);
+            }
+        }
         long remaining = current.remainingMs(roundConfig.timeLimitSeconds());
         if (remaining <= 0) {
             finishByTimeout();
@@ -540,6 +654,7 @@ public final class Game {
                     Placeholder.unparsed("count", String.valueOf(current.board().count(winner.id()))));
             plugin.getLogger().info("Round timed out, winner: " + winner.name() + ", seed " + current.seed());
         }
+        broadcastBreakdown(current);
         hud.timeUp();
         endRound();
     }
@@ -589,6 +704,7 @@ public final class Game {
         if (!current.board().claim(cell, team.id(), System.currentTimeMillis())) {
             return;
         }
+        current.recordFirstClaim(cell, team.id(), current.elapsedMs());
         String itemKey = current.card().item(cell);
         ItemType type = roundConfig.itemType(itemKey);
         // ItemType is a Translatable, so each player sees the item name in
@@ -619,12 +735,139 @@ public final class Game {
         }
     }
 
+    /**
+     * Checks if the completed advancement belongs to the active card and awards
+     * the cell if the player's team has not claimed it yet.
+     */
+    public void checkAdvancementClaim(Player player, Advancement advancement) {
+        Round current = round;
+        if (current == null || current.state() != Round.State.RUNNING || current.mode() != BingoGameMode.ADVANCEMENTS) {
+            return;
+        }
+        NamespacedKey key = advancement.getKey();
+        if (key.getNamespace().equals("minecraft") && key.getKey().startsWith("recipes/")) {
+            return;
+        }
+        Team team = teams.of(player.getUniqueId());
+        if (team == null) {
+            return;
+        }
+        String keyStr = key.toString();
+        for (int cell = 0; cell < BingoCard.CELLS; cell++) {
+            if (current.board().isClaimed(cell, team.id())) {
+                continue;
+            }
+            if (keyStr.equalsIgnoreCase(current.card().item(cell))) {
+                claimAdvancementCell(current, team, cell, player, advancement);
+            }
+        }
+    }
+
+    private void claimAdvancementCell(Round current, Team team, int cell, Player claimer, Advancement advancement) {
+        if (!current.board().claim(cell, team.id(), System.currentTimeMillis())) {
+            return;
+        }
+        current.recordFirstClaim(cell, team.id(), current.elapsedMs());
+        Component advTitle = advancement.getDisplay() != null
+                ? advancement.getDisplay().title()
+                : Component.text(advancement.getKey().toString());
+
+        TagResolver adv = Placeholder.component("advancement", advTitle);
+        TagResolver item = Placeholder.component("item", advTitle);
+        int count = current.board().count(team.id());
+
+        broadcast("claim-advancement", adv, item, teamPlaceholder(team),
+                Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+
+        Component bar = messages().render("claim-advancement-actionbar", adv, item,
+                Placeholder.unparsed("count", String.valueOf(count)),
+                Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+        Title title = Title.title(
+                messages().render("claim-advancement-title", adv, item),
+                messages().render("claim-advancement-subtitle", adv, item, teamPlaceholder(team),
+                        Placeholder.unparsed("count", String.valueOf(count)),
+                        Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS))),
+                Title.Times.times(Duration.ofMillis(200), Duration.ofSeconds(2), Duration.ofMillis(300)));
+
+        for (UUID memberId : team.members()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null) {
+                member.sendActionBar(bar);
+                member.showTitle(title);
+            }
+        }
+
+        plugin.getLogger().info("Team " + team.name() + " claimed advancement " + advancement.getKey()
+                + " (cell " + cell + "), " + count + " cells, by " + claimer.getName());
+        hud.claimHappened(team);
+        cardMenu.refresh(current);
+
+        if (current.board().completedWinner().orElse(-1) == team.id()) {
+            winByCompletion(current, team);
+        }
+    }
+
     private void winByCompletion(Round current, Team winner) {
         String time = clock(current.elapsedMs());
         broadcast("round-won-chat", teamPlaceholder(winner), Placeholder.unparsed("time", time));
         plugin.getLogger().info("Round won by " + winner.name() + " in " + time + ", seed " + current.seed());
+        broadcastBreakdown(current);
         hud.won(winner);
         endRound();
+    }
+
+    private void broadcastBreakdown(Round current) {
+        broadcast("breakdown.header");
+        broadcast("breakdown.separator");
+
+        List<Team> participants = teams.all().stream()
+                .filter(t -> t.size() > 0 || current.board().count(t.id()) > 0)
+                .toList();
+        if (participants.isEmpty()) {
+            participants = teams.all();
+        }
+
+        List<Team> ranked = participants.stream()
+                .sorted((a, b) -> {
+                    int countA = current.board().count(a.id());
+                    int countB = current.board().count(b.id());
+                    if (countA != countB) {
+                        return Integer.compare(countB, countA);
+                    }
+                    long timeA = current.board().lastClaimTime(a.id());
+                    long timeB = current.board().lastClaimTime(b.id());
+                    return Long.compare(timeA, timeB);
+                })
+                .toList();
+
+        int pos = 1;
+        for (Team team : ranked) {
+            int count = current.board().count(team.id());
+            String key = count == 1 ? "breakdown.ranking-entry-singular" : "breakdown.ranking-entry";
+            broadcast(key,
+                    Placeholder.unparsed("pos", String.valueOf(pos)),
+                    teamPlaceholder(team),
+                    Placeholder.unparsed("count", String.valueOf(count)));
+            pos++;
+        }
+
+        Round.FirstClaim first = current.firstClaim();
+        if (first != null) {
+            Team claimerTeam = teams.byId(first.teamId());
+            String itemKey = current.card().item(first.cell());
+            ItemType type = roundConfig.itemType(itemKey);
+            TagResolver item = Placeholder.component("item", type == null
+                    ? Component.text(itemKey)
+                    : Component.translatable(type));
+            TagResolver teamTag = claimerTeam != null ? teamPlaceholder(claimerTeam) : Placeholder.unparsed("team", "?");
+            broadcast("breakdown.first-claim", item, teamTag, Placeholder.unparsed("time", clock(first.elapsedMs())));
+        } else {
+            broadcast("breakdown.first-claim-none");
+        }
+
+        broadcast("breakdown.total-time", Placeholder.unparsed("time", clock(current.elapsedMs())));
+        broadcast("breakdown.separator");
     }
 
     /** Registry item types are singletons, so identity compare is enough. */

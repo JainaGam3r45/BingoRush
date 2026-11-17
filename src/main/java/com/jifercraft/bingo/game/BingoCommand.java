@@ -24,9 +24,9 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand {
 
-    private static final List<String> PLAYER_HELP = List.of("join", "card", "leave");
+    private static final List<String> PLAYER_HELP = List.of("join", "card", "leave", "coords");
     private static final List<String> ADMIN_HELP = List.of(
-            "start", "stop", "pause", "resume", "reroll", "teams", "reload");
+            "card-spectator", "start", "stop", "pause", "resume", "reroll", "teams", "reload");
 
     private final BingoRush plugin;
     private final Game game;
@@ -51,15 +51,36 @@ public final class BingoCommand {
                 .then(Commands.literal("leave")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, game::leaveTeam)))
+                .then(Commands.literal("coords")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::shareCoordinates)))
+                .then(Commands.literal("c")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::shareCoordinates)))
                 .then(Commands.literal("card")
                         .requires(this::isPlayerAllowed)
-                        .executes(ctx -> runForPlayer(ctx, game::openCard)))
+                        .executes(ctx -> runForPlayer(ctx, game::openCard))
+                        .then(Commands.argument("team", StringArgumentType.string())
+                                .requires(this::isAdmin)
+                                .suggests(this::suggestTeams)
+                                .executes(ctx -> runForPlayer(ctx, player ->
+                                        game.openCardSpectator(player, StringArgumentType.getString(ctx, "team"))))))
                 .then(Commands.literal("start")
                         .requires(this::isAdmin)
-                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null)))
+                        .executes(ctx -> run(ctx, sender -> game.startRound(sender, null, null)))
+                        .then(Commands.literal("items")
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ITEMS, null)))
+                                .then(Commands.argument("seed", StringArgumentType.greedyString())
+                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
+                                                BingoGameMode.ITEMS, StringArgumentType.getString(ctx, "seed"))))))
+                        .then(Commands.literal("advancements")
+                                .executes(ctx -> run(ctx, sender -> game.startRound(sender, BingoGameMode.ADVANCEMENTS, null)))
+                                .then(Commands.argument("seed", StringArgumentType.greedyString())
+                                        .executes(ctx -> run(ctx, sender -> game.startRound(sender,
+                                                BingoGameMode.ADVANCEMENTS, StringArgumentType.getString(ctx, "seed"))))))
                         .then(Commands.argument("seed", StringArgumentType.greedyString())
                                 .executes(ctx -> run(ctx, sender -> game.startRound(sender,
-                                        StringArgumentType.getString(ctx, "seed"))))))
+                                        null, StringArgumentType.getString(ctx, "seed"))))))
                 .then(Commands.literal("stop").requires(this::isAdmin)
                         .executes(ctx -> run(ctx, game::stopRound)))
                 .then(Commands.literal("pause").requires(this::isAdmin)

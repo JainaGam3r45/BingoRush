@@ -4,6 +4,7 @@ import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.card.ClaimBoard;
 import com.jifercraft.bingo.config.Messages;
+import io.papermc.paper.advancement.AdvancementDisplay;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -17,6 +18,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.advancement.Advancement;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
@@ -41,8 +43,8 @@ public final class CardMenu {
     private static final int FIRST_CARD_COLUMN = 2;
     private static final int COLUMNS = 9;
 
-    // One entry per player with the menu open, with the round it belongs to.
-    private record OpenMenu(Round round, Inventory top) {
+    // One entry per player with the menu open, with the round and viewed team.
+    private record OpenMenu(Round round, Inventory top, int teamId) {
     }
 
     private final BingoRush plugin;
@@ -64,13 +66,16 @@ public final class CardMenu {
                 && stack.getItemMeta().getPersistentDataContainer().has(tag, PersistentDataType.BYTE);
     }
 
-    public void open(Player player, Round round, Team viewer) {
+    public void open(Player player, Round round, Team viewer, boolean spectator) {
+        Component title = spectator
+                ? messages.render("menu-title-spectator", Game.teamPlaceholder(viewer))
+                : messages.render("menu-title");
         InventoryView view = MenuType.GENERIC_9X5.builder()
-                .title(messages.render("menu-title"))
+                .title(title)
                 .build(player);
         render(view.getTopInventory(), round, viewer);
         view.open();
-        openMenus.put(player.getUniqueId(), new OpenMenu(round, view.getTopInventory()));
+        openMenus.put(player.getUniqueId(), new OpenMenu(round, view.getTopInventory(), viewer.id()));
     }
 
     /**
@@ -90,7 +95,7 @@ public final class CardMenu {
                 iterator.remove();
                 continue;
             }
-            Team viewer = teams.of(entry.getKey());
+            Team viewer = teams.byId(menu.teamId());
             if (viewer != null) {
                 render(menu.top(), round, viewer);
             }
@@ -143,6 +148,13 @@ public final class CardMenu {
     }
 
     private ItemStack cellItem(Round round, Team viewer, int cell) {
+        if (round.mode() == BingoGameMode.ADVANCEMENTS) {
+            return advancementCellItem(round, viewer, cell);
+        }
+        return itemCellItem(round, viewer, cell);
+    }
+
+    private ItemStack itemCellItem(Round round, Team viewer, int cell) {
         String itemKey = round.card().item(cell);
         ItemType type = plugin.bingoConfig().itemType(itemKey);
         ItemStack stack = (type == null ? ItemType.BARRIER : type).createItemStack();
@@ -190,6 +202,73 @@ public final class CardMenu {
             meta.addItemFlags(ItemFlag.values());
             // The viewer's own claims glow; rival claims stay dull, so the
             // state reads at a glance before the lore.
+            meta.setEnchantmentGlintOverride(own ? Boolean.TRUE : Boolean.FALSE);
+            meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
+        });
+        return stack;
+    }
+
+    private ItemStack advancementCellItem(Round round, Team viewer, int cell) {
+        String key = round.card().item(cell);
+        Advancement adv = plugin.bingoConfig().advancement(key);
+        AdvancementDisplay display = adv != null ? adv.getDisplay() : null;
+        ItemStack stack;
+        if (display != null && display.icon() != null) {
+            stack = display.icon().clone();
+        } else {
+            stack = ItemType.KNOWLEDGE_BOOK.createItemStack();
+        }
+        ClaimBoard board = round.board();
+        String tierId = plugin.bingoConfig().advancementPool().tierOf(key);
+        boolean own = board.claimers(cell).contains(viewer.id());
+        stack.editMeta(meta -> {
+            Component advTitle = display != null ? display.title() : Component.text(key);
+            meta.displayName(messages.render("menu-cell-name",
+                    Placeholder.component("item", advTitle),
+                    Placeholder.component("advancement", advTitle)));
+
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.render("menu-cell-separator"));
+
+            if (display != null && display.description() != null) {
+                lore.add(messages.render("menu-cell-advancement-desc",
+                        Placeholder.component("description", display.description())));
+                lore.add(messages.render("menu-cell-separator"));
+            }
+
+            if (tierId != null) {
+                Component tierComp = messages.render("tier-" + tierId);
+                lore.add(messages.render("menu-cell-difficulty", Placeholder.component("tier", tierComp)));
+                lore.add(messages.render("menu-cell-separator"));
+            }
+
+            List<Integer> claimers = board.claimers(cell);
+            if (claimers.isEmpty()) {
+                lore.add(messages.render("menu-status-available"));
+                lore.add(messages.render("menu-status-available-hint-advancement"));
+            } else {
+                if (own) {
+                    lore.add(messages.render("menu-status-own"));
+                    lore.add(messages.render("menu-status-own-by", Game.teamPlaceholder(viewer)));
+                    long claimedAt = board.claimTime(cell, viewer.id());
+                    lore.add(messages.render("menu-status-own-time",
+                            Placeholder.unparsed("time", CLOCK.format(
+                                    Instant.ofEpochMilli(claimedAt).atZone(ZoneId.systemDefault())))));
+                }
+                for (int teamId : claimers) {
+                    if (teamId == viewer.id()) {
+                        continue;
+                    }
+                    Team claimer = teams.byId(teamId);
+                    if (claimer != null) {
+                        lore.add(messages.render("menu-status-rival", Game.teamPlaceholder(claimer)));
+                    }
+                }
+            }
+            lore.add(messages.render("menu-cell-separator"));
+            meta.lore(lore);
+
+            meta.addItemFlags(ItemFlag.values());
             meta.setEnchantmentGlintOverride(own ? Boolean.TRUE : Boolean.FALSE);
             meta.getPersistentDataContainer().set(tag, PersistentDataType.BYTE, (byte) 1);
         });
