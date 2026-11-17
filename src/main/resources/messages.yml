@@ -24,7 +24,7 @@ help:
   card-spectator: "<white>/bingo card <hl><equipo></hl></white> <muted>|</muted> <body>Mira la cartilla de un equipo"
   leave: "<white>/bingo leave</white> <muted>|</muted> <body>Sal de tu equipo"
   coords: "<white>/bingo coords</white> <muted>|</muted> <body>Envía tus coordenadas a tu equipo"
-  start: "<white>/bingo start <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
+  start: "<white>/bingo start <hl>[items|advancements]</hl> <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
   stop: "<white>/bingo stop</white> <muted>|</muted> <body>Detén la ronda"
   pause: "<white>/bingo pause</white> <muted>|</muted> <body>Pausa la ronda"
   resume: "<white>/bingo resume</white> <muted>|</muted> <body>Reanuda la ronda"
@@ -88,6 +88,16 @@ round-won-chat: "<prefix><body>¡El equipo <team><body> gana la ronda en <hl><ti
 round-time-up-title: "<gradient:#FF6B6B:#FF2E2E><b>¡Tiempo!</b></gradient>"
 round-time-up-chat: "<prefix><body>Se acabó el tiempo. Gana el equipo <team><body> con <hl><count></hl> <body>casillas."
 round-no-claims: "<prefix><body>Se acabó el tiempo y nadie reclamó ninguna casilla."
+
+# Match breakdown.
+breakdown:
+  header: "<brand> <hl>Resumen de la Partida</hl>"
+  separator: "<muted><st>                             </st></muted>"
+  ranking-entry: " <hl><pos>º</hl> <team><muted>:</muted> <hl><count></hl> <body>casillas</body>"
+  ranking-entry-singular: " <hl><pos>º</hl> <team><muted>:</muted> <hl><count></hl> <body>casilla</body>"
+  first-claim: " <muted>»</muted> <white>Primer reclamo:</white> <hl><item></hl> <body>por <team> <body>(<time>)</body>"
+  first-claim-none: " <muted>»</muted> <white>Primer reclamo:</white> <muted>Ninguno</muted>"
+  total-time: " <muted>»</muted> <white>Tiempo total:</white> <hl><time></hl>"
 
 # Claims.
 claim: "<prefix><body>El equipo <team><body> consiguió <hl><item></hl> <muted>(<count>/<total>)</muted>"

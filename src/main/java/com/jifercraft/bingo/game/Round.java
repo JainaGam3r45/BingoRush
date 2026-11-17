@@ -16,21 +16,35 @@ public final class Round {
         PAUSED
     }
 
+    public record FirstClaim(int cell, int teamId, long elapsedMs) {
+    }
+
     private final long seed;
+    private final BingoGameMode mode;
     private final BingoCard card;
     private final ClaimBoard board;
     private State state = State.COUNTDOWN;
     private long elapsedMs;
     private long lastResumeAt;
+    private FirstClaim firstClaim;
 
     Round(long seed, BingoCard card, ClaimBoard board) {
+        this(seed, BingoGameMode.ITEMS, card, board);
+    }
+
+    Round(long seed, BingoGameMode mode, BingoCard card, ClaimBoard board) {
         this.seed = seed;
+        this.mode = mode;
         this.card = card;
         this.board = board;
     }
 
     public long seed() {
         return seed;
+    }
+
+    public BingoGameMode mode() {
+        return mode;
     }
 
     public BingoCard card() {
@@ -43,6 +57,16 @@ public final class Round {
 
     public State state() {
         return state;
+    }
+
+    public FirstClaim firstClaim() {
+        return firstClaim;
+    }
+
+    public void recordFirstClaim(int cell, int teamId, long elapsedMs) {
+        if (firstClaim == null) {
+            firstClaim = new FirstClaim(cell, teamId, elapsedMs);
+        }
     }
 
     void beginRun() {
