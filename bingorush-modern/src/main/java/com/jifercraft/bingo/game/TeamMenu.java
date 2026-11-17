@@ -63,7 +63,9 @@ public final class TeamMenu {
 
     public void open(Player player) {
         if (game.round() != null) {
-            messages.send(player, "round-already-running");
+            // The picker is a lobby menu. During a round the same command is a
+            // shortcut to /bingo join, which knows what a late joiner may do.
+            game.joinTeam(player, null);
             return;
         }
         InventoryView view = (game.teams().all().size() <= COLUMNS ? MenuType.GENERIC_9X3 : MenuType.GENERIC_9X4)

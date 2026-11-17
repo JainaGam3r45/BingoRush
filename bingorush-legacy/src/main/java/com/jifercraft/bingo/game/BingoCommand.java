@@ -24,12 +24,12 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "coords", "version");
+    private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "spectate", "coords", "version");
     private static final List<String> ADMIN_HELP = Arrays.asList(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
             "history", "export", "reload");
     private static final List<String> PLAYER_SUBCOMMANDS = Arrays.asList(
-            "help", "version", "join", "leave", "coords", "c", "card", "teams");
+            "help", "version", "join", "leave", "spectate", "coords", "c", "card", "teams");
     private static final List<String> ADMIN_SUBCOMMANDS = Arrays.asList(
             "start", "setup", "stop", "pause", "resume", "reroll", "reload", "history", "export");
 
@@ -88,6 +88,9 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                 break;
             case "leave":
                 asPlayer(sender, null, game::leaveTeam);
+                break;
+            case "spectate":
+                asPlayer(sender, null, game::spectate);
                 break;
             case "coords":
             case "c":

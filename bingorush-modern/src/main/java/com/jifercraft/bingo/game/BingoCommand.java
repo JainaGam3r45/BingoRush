@@ -27,7 +27,7 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand {
 
-    private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "coords", "version");
+    private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "spectate", "coords", "version");
     private static final List<String> ADMIN_HELP = List.of(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
             "history", "export", "reload");
@@ -56,6 +56,9 @@ public final class BingoCommand {
                 .then(Commands.literal("leave")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, game::leaveTeam)))
+                .then(Commands.literal("spectate")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::spectate)))
                 .then(Commands.literal("coords")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, game::shareCoordinates)))

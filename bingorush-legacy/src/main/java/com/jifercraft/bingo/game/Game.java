@@ -348,11 +348,6 @@ public final class Game {
     public void joinTeam(Player player, String teamName) {
         BingoConfig config = plugin.bingoConfig();
         Round current = round;
-        if (current != null && current.state() != Round.State.COUNTDOWN
-                && config != null && config.lateJoin() == LateJoin.SPECTATE) {
-            messages().send(player, "late-join-spectate");
-            return;
-        }
         if (current != null && current.isEliminated(player.getUniqueId())) {
             messages().send(player, "eliminated-cannot-join");
             return;
@@ -360,6 +355,11 @@ public final class Game {
         Team currentTeam = teams.of(player.getUniqueId());
         if (currentTeam != null) {
             messages().send(player, "team-already-in", teamPlaceholder(currentTeam));
+            return;
+        }
+        if (current != null && current.state() != Round.State.COUNTDOWN
+                && config != null && config.lateJoin() == LateJoin.SPECTATE) {
+            lateJoinClosed(player);
             return;
         }
         Team target;
@@ -396,10 +396,57 @@ public final class Game {
         teamMenu.refreshAll();
         if (current != null) {
             // Joined during the countdown or a round that allows late play.
+            // Someone who was only watching gets their game mode back to play.
+            GameMode watching = savedGameModes.remove(player.getUniqueId());
+            if (watching != null) {
+                player.setGameMode(watching);
+            }
+            // The others had their inventory emptied when the round started;
+            // without this a late joiner could bring a full backpack.
+            boolean started = current.state() != Round.State.COUNTDOWN;
+            if (started && roundConfig != null && roundConfig.clearInventories()
+                    && !savedInventories.containsKey(player.getUniqueId())) {
+                saveAndClearInventory(player);
+            }
             giveCardItem(player);
             hud.playerJoined(player);
             advancements.syncTab(player, current, target);
             revokeOwnedAdvancements(player, target);
+        }
+    }
+
+    /** A player without a team watches the running round from spectator mode. */
+    public void spectate(Player player) {
+        if (round == null) {
+            messages().send(player, "round-not-running");
+            return;
+        }
+        Team team = teams.of(player.getUniqueId());
+        if (team != null) {
+            messages().send(player, "spectate-in-team", teamPlaceholder(team));
+            return;
+        }
+        startSpectating(player);
+        messages().send(player, "spectate-started");
+    }
+
+    // The round is closed to new players. Whoever runs the event is told but
+    // never forced into spectator mode.
+    private void lateJoinClosed(Player player) {
+        if (!player.hasPermission("bingo.admin")) {
+            startSpectating(player);
+        }
+        messages().send(player, "late-join-spectate");
+    }
+
+    // The mode they had goes in the same map as the one for knocked out
+    // players, so it is saved with the round and given back when it ends,
+    // even if they are offline by then.
+    private void startSpectating(Player player) {
+        savedGameModes.putIfAbsent(player.getUniqueId(), player.getGameMode());
+        player.setGameMode(GameMode.SPECTATOR);
+        if (round != null && round.state() != Round.State.COUNTDOWN) {
+            saveActiveRound();
         }
     }
 
@@ -671,6 +718,16 @@ public final class Game {
             } else {
                 restoreInventory(player);
                 awardQuietly(() -> pendingRestores.applyTo(player));
+                // After the pending restores, so a mode they were owed from
+                // the last round is not saved as their own.
+                BingoConfig config = plugin.bingoConfig();
+                if (round.state() != Round.State.COUNTDOWN && config != null
+                        && config.lateJoin() == LateJoin.SPECTATE
+                        && !player.hasPermission("bingo.admin")
+                        && !savedGameModes.containsKey(player.getUniqueId())) {
+                    startSpectating(player);
+                    messages().send(player, "late-join-spectate");
+                }
             }
             if (team != null) {
                 revokeOwnedAdvancements(player, team);
@@ -1448,13 +1505,16 @@ public final class Game {
         for (Team team : teams.all()) {
             for (UUID memberId : team.members()) {
                 Player member = Bukkit.getPlayer(memberId);
-                if (member == null) {
-                    continue;
+                if (member != null) {
+                    saveAndClearInventory(member);
                 }
-                savedInventories.put(memberId, member.getInventory().getContents());
-                member.getInventory().clear();
             }
         }
+    }
+
+    private void saveAndClearInventory(Player player) {
+        savedInventories.put(player.getUniqueId(), player.getInventory().getContents());
+        player.getInventory().clear();
     }
 
     // Players who are offline right now get theirs on their next login.

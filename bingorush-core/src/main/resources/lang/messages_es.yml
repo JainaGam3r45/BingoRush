@@ -23,6 +23,7 @@ help:
   card: "<white>/bingo card</white> <muted>|</muted> <body>Abre tu cartilla"
   card-spectator: "<white>/bingo card <hl><equipo></hl></white> <muted>|</muted> <body>Mira la cartilla de un equipo"
   leave: "<white>/bingo leave</white> <muted>|</muted> <body>Sal de tu equipo"
+  spectate: "<white>/bingo spectate</white> <muted>|</muted> <body>Mira la ronda en marcha como espectador"
   coords: "<white>/bingo coords</white> <muted>|</muted> <body>Envía tus coordenadas a tu equipo"
   start: "<white>/bingo start <hl>[items|advancements]</hl> <hl>[lockout:true|false]</hl> <hl>[semilla]</hl></white> <muted>|</muted> <body>Empieza una ronda"
   setup: "<white>/bingo setup</white> <muted>|</muted> <body>Abre el panel para preparar la ronda"
@@ -226,6 +227,8 @@ setup-start-hint: "<!italic><muted><i>Pulsa para lanzar la cuenta atrás</i></mu
 
 # Spectators.
 late-join-spectate: "<prefix><body>La ronda ya empezó: la miras como espectador. Cuando acabe podrás jugar."
+spectate-started: "<prefix><body>Ahora miras la ronda como espectador. Recuperarás tu modo de juego cuando termine."
+spectate-in-team: "<prefix><err>Estás jugando en el equipo <team><err>. Sal de él con <hl>/bingo leave</hl> antes."
 
 # The physical card item handed out when the round starts.
 card-item-name: "<brand> <hl>Cartilla</hl>"

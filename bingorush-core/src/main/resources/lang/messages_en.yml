@@ -27,6 +27,7 @@ help:
   card: "<white>/bingo card</white> <muted>|</muted> <body>Open your card"
   card-spectator: "<white>/bingo card <hl><team></hl></white> <muted>|</muted> <body>Watch a team's card"
   leave: "<white>/bingo leave</white> <muted>|</muted> <body>Leave your team"
+  spectate: "<white>/bingo spectate</white> <muted>|</muted> <body>Watch the running round as a spectator"
   coords: "<white>/bingo coords</white> <muted>|</muted> <body>Send your coordinates to your team"
   start: "<white>/bingo start <hl>[items|advancements]</hl> <hl>[lockout:true|false]</hl> <hl>[seed]</hl></white> <muted>|</muted> <body>Start a round"
   setup: "<white>/bingo setup</white> <muted>|</muted> <body>Open the round setup panel"
@@ -230,6 +231,8 @@ setup-start-hint: "<!italic><muted><i>Click to start the countdown</i></muted>"
 
 # Spectators.
 late-join-spectate: "<prefix><body>The round has already started, so you're watching as a spectator. You can play in the next one."
+spectate-started: "<prefix><body>You're watching as a spectator. Your game mode comes back when the round ends."
+spectate-in-team: "<prefix><err>You're playing on team <team><err>. Leave it with <hl>/bingo leave</hl> first."
 
 # The physical card item handed out when the round starts.
 card-item-name: "<brand> <hl>Card</hl>"

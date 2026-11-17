@@ -59,8 +59,11 @@ clear-inventories: true
 scatter-players: true
 scatter-radius: 24
 
-# What a player who joins after the start gets: "join" puts them in a team,
-# "spectate" lets them watch the round.
+# What a player who joins after the round started gets. "join" puts them in a
+# team like everyone else, with their inventory emptied. "spectate" makes them
+# a spectator until the round ends, when their game mode comes back. Players
+# with bingo.admin are never forced, and players already online without a
+# team are left alone. Anyone without a team can use /bingo spectate.
 late-join: join
 
 # Teams for the event. Each one has a name and a color, and players join with
