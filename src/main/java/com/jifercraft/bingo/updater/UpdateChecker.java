@@ -188,7 +188,9 @@ public final class UpdateChecker implements Listener {
     }
 
     private void handleCheckResult(CheckResult result, CommandSender feedback) {
-        if (plugin == null) {
+        // A check can finish after the plugin is disabled, and the scheduler
+        // refuses tasks from a disabled plugin.
+        if (plugin == null || !plugin.isEnabled()) {
             return;
         }
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -200,10 +202,15 @@ public final class UpdateChecker implements Listener {
                         plugin.getLogger().info("Download it at: " + downloadUrl);
 
                         for (Player player : Bukkit.getOnlinePlayers()) {
-                            if (player.hasPermission("bingo.admin") || player.hasPermission("bingo.update")) {
+                            if (player != feedback
+                                    && (player.hasPermission("bingo.admin") || player.hasPermission("bingo.update"))) {
                                 sendUpdateNotification(player);
                             }
                         }
+                    }
+                    // Whoever ran /bingo version gets an answer, even with the notifier off.
+                    if (feedback != null && isSenderReachable(feedback)) {
+                        sendUpdateNotification(feedback);
                     }
                 }
                 case RATE_LIMITED -> {
