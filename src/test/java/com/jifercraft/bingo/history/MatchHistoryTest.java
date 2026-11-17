@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -159,6 +160,18 @@ class MatchHistoryTest {
         assertNotNull(history.summary("m-4"));
         assertEquals("Team 4", history.summary("m-4").winnerName());
         assertNull(history.summary("non-existent"));
+    }
+
+    @Test
+    void loadMatchRejectsIdsOutsideTheDirectory(@TempDir Path tempDir) throws Exception {
+        File dir = tempDir.resolve("matches").toFile();
+        MatchHistory history = new MatchHistory(dir, null, Runnable::run);
+        history.recordMatch(createDummyRecord("m-1", 1000L, "Team 1"), 50);
+        Files.copy(new File(dir, "m-1.json").toPath(), tempDir.resolve("outside.json"));
+
+        assertNull(history.loadMatch("../outside"));
+        assertNull(history.loadMatch(""));
+        assertNotNull(history.loadMatchAsync("m-1").get());
     }
 
     @Test

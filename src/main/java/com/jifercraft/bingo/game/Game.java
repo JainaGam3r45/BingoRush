@@ -1247,12 +1247,29 @@ public final class Game {
             messages().send(sender, "history.disabled");
             return;
         }
-        MatchRecord record = plugin.matchHistory().loadMatch(id);
-        if (record == null) {
+        MatchSummary summary = plugin.matchHistory().summary(id);
+        if (summary == null) {
             messages().send(sender, "history.not-found", Placeholder.unparsed("id", id));
             return;
         }
+        plugin.matchHistory().loadMatchAsync(summary.id()).thenAccept(record -> {
+            if (!plugin.isEnabled()) {
+                return;
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (sender instanceof Player player && !player.isOnline()) {
+                    return;
+                }
+                if (record == null) {
+                    messages().send(sender, "history.not-found", Placeholder.unparsed("id", id));
+                } else {
+                    sendMatchDetails(sender, record);
+                }
+            });
+        });
+    }
 
+    private void sendMatchDetails(CommandSender sender, MatchRecord record) {
         messages().send(sender, "history.detail-header", Placeholder.unparsed("id", record.id()));
         messages().send(sender, "history.detail-date", Placeholder.unparsed("date", record.date()));
         messages().send(sender, "history.detail-mode",
@@ -1318,14 +1335,14 @@ public final class Game {
             messages().send(sender, "history.disabled");
             return;
         }
-        File file = new File(plugin.matchHistory().directory(), id + ".json");
-        if (!file.exists()) {
+        MatchSummary summary = plugin.matchHistory().summary(id);
+        if (summary == null) {
             messages().send(sender, "history.not-found", Placeholder.unparsed("id", id));
             return;
         }
         messages().send(sender, "history.exported",
-                Placeholder.unparsed("id", id),
-                Placeholder.unparsed("file", id + ".json"));
+                Placeholder.unparsed("id", summary.id()),
+                Placeholder.unparsed("file", summary.id() + ".json"));
     }
 
     private void recordMatchResult(Round current, Team winner, String reason) {

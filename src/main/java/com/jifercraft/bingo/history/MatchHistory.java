@@ -15,8 +15,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 
 /**
@@ -27,6 +29,7 @@ import org.bukkit.Bukkit;
 public final class MatchHistory {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Pattern VALID_ID = Pattern.compile("[A-Za-z0-9_-]+");
 
     private final File directory;
     private final BingoRush plugin;
@@ -151,8 +154,16 @@ public final class MatchHistory {
         }
     }
 
+    /** Reads a match file on the async executor. The future completes on that thread. */
+    public CompletableFuture<MatchRecord> loadMatchAsync(String id) {
+        CompletableFuture<MatchRecord> future = new CompletableFuture<>();
+        asyncExecutor.accept(() -> future.complete(loadMatch(id)));
+        return future;
+    }
+
     public MatchRecord loadMatch(String id) {
-        if (id == null || id.isBlank()) {
+        // The id comes straight from a command argument; keep it inside data/matches/.
+        if (id == null || !VALID_ID.matcher(id).matches()) {
             return null;
         }
         File file = new File(directory, id + ".json");
@@ -169,8 +180,13 @@ public final class MatchHistory {
         }
     }
 
-    public synchronized void clearHistory() {
+    /** Empties the in-memory index right away and deletes the files on the async executor. */
+    public void clearHistory() {
         summaries.clear();
+        asyncExecutor.accept(this::deleteMatchFiles);
+    }
+
+    private synchronized void deleteMatchFiles() {
         File[] files = directory.listFiles((dir, name) -> name.endsWith(".json"));
         if (files != null) {
             for (File file : files) {
