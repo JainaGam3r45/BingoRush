@@ -7,14 +7,18 @@ import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.api.events.BingoClaimEvent;
 import com.jifercraft.bingo.config.BingoConfig;
 import java.io.File;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
@@ -32,6 +36,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -60,6 +66,10 @@ public final class Season implements Listener {
     // "already found" right after the first found the gift.
     private final Map<UUID, Long> lastGiftClick = new HashMap<>();
     private final Random random = new Random();
+    private final SeasonLobby lobbyEffects;
+    // Players the gift chime reached last second; the countdown leaves
+    // their action bar alone.
+    private final Set<UUID> nearGift = new HashSet<>();
 
     private SeasonClock clock;
     private SeasonPhase currentPhase;
@@ -74,8 +84,9 @@ public final class Season implements Listener {
         this.claimsFile = new File(plugin.getDataFolder(), "data/season/gift_claims.json");
         this.claims = GiftClaims.load(claimsFile, plugin.getLogger());
         this.clock = SeasonClock.system();
+        this.lobbyEffects = new SeasonLobby(plugin, this, settings);
         this.currentPhase = settings.enabled()
-                ? settings.window().phaseAt(clock.currentTimeMillis())
+                ? window().phaseAt(clock.currentTimeMillis())
                 : SeasonPhase.INACTIVE;
     }
 
@@ -98,7 +109,12 @@ public final class Season implements Listener {
         proximityTask = Bukkit.getScheduler().runTaskTimer(plugin, this::proximityTick, 40L, 20L);
     }
 
+    private SeasonWindow window() {
+        return settings.windowAt(clock.currentTimeMillis());
+    }
+
     public void stop() {
+        lobbyEffects.clear();
         if (tickerTask != null) {
             tickerTask.cancel();
             tickerTask = null;
@@ -120,7 +136,7 @@ public final class Season implements Listener {
         if (!settings.enabled()) {
             return;
         }
-        SeasonPhase newPhase = settings.window().phaseAt(clock.currentTimeMillis());
+        SeasonPhase newPhase = window().phaseAt(clock.currentTimeMillis());
         if (newPhase != currentPhase) {
             transitionTo(newPhase);
         }
@@ -132,7 +148,8 @@ public final class Season implements Listener {
         switch (newPhase) {
             case PRE_SEASON:
                 plugin.messages().broadcast("season.pre-season-chat",
-                        Placeholder.unparsed("date", SeasonWindow.formatUtc(settings.window().activeStartMillis())));
+                        Placeholder.unparsed("date", DateTimeFormatter.ISO_LOCAL_DATE.format(
+                                Instant.ofEpochMilli(window().activeStartMillis()).atZone(settings.calendar().zone()))));
                 break;
             case ACTIVE:
                 decorateLobby();
@@ -143,6 +160,7 @@ public final class Season implements Listener {
                 plugin.messages().broadcast("season.wrap-up-chat");
                 break;
             default:
+                lobbyEffects.clear();
                 restoreBlocks();
                 // A new season starts with every gift unfound again.
                 claims.resetAll();
@@ -360,7 +378,7 @@ public final class Season implements Listener {
         }
     }
 
-    private void effect(Location location, String configured, String fallback) {
+    void effect(Location location, String configured, String fallback) {
         String name = configured == null || configured.trim().isEmpty() ? fallback : configured.trim();
         Optional<Effect> effect = effects.computeIfAbsent(name.toUpperCase(Locale.ROOT), Season::effectNamed);
         if (!effect.isPresent() && !name.equals(fallback)) {
@@ -390,6 +408,7 @@ public final class Season implements Listener {
      * pitch as a player gets close to a gift they have not found.
      */
     public void proximityTick() {
+        lobbyEffects.tick(currentPhase, clock.currentTimeMillis(), lobby());
         if (!currentPhase.isVisualsActive()) {
             return;
         }
@@ -432,6 +451,10 @@ public final class Season implements Listener {
                     }
                 }
             }
+        }
+        nearGift.clear();
+        for (Player player : nearest.keySet()) {
+            nearGift.add(player.getUniqueId());
         }
         if (settings.giftSettings().actionbarClue()) {
             for (Map.Entry<Player, Double> entry : nearest.entrySet()) {
@@ -520,6 +543,28 @@ public final class Season implements Listener {
         }
     }
 
+    boolean nearGift(Player player) {
+        return nearGift.contains(player.getUniqueId());
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        final Player player = event.getPlayer();
+        // After the join messages of everyone else, or it gets buried.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                lobbyEffects.greet(player, currentPhase, clock.currentTimeMillis());
+            }
+        }, 40L);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        lobbyEffects.forget(event.getPlayer().getUniqueId());
+        nearGift.remove(event.getPlayer().getUniqueId());
+        lastGiftClick.remove(event.getPlayer().getUniqueId());
+    }
+
     @EventHandler
     public void onBingoClaim(BingoClaimEvent event) {
         if (event.getPlayer() != null) {
@@ -551,16 +596,16 @@ public final class Season implements Listener {
         long target;
         switch (phase) {
             case PRE_SEASON:
-                target = settings.window().preSeasonStartMillis() + 1000L;
+                target = window().preSeasonStartMillis() + 1000L;
                 break;
             case ACTIVE:
-                target = settings.window().activeStartMillis() + 1000L;
+                target = window().activeStartMillis() + 1000L;
                 break;
             case WRAP_UP:
-                target = settings.window().activeEndMillis() + 1000L;
+                target = window().activeEndMillis() + 1000L;
                 break;
             default:
-                target = settings.window().wrapUpEndMillis() + 1000L;
+                target = window().wrapUpEndMillis() + 1000L;
         }
         clock = new SimulatedSeasonClock(target);
         transitionTo(phase);

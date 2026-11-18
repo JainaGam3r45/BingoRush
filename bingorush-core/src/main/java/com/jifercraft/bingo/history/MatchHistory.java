@@ -15,7 +15,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,11 +40,36 @@ public final class MatchHistory {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Pattern VALID_ID = Pattern.compile("[A-Za-z0-9_-]+");
 
+    public static final class PlayerStats {
+        private final int matches;
+        private final int wins;
+        private final int claims;
+
+        public PlayerStats(int matches, int wins, int claims) {
+            this.matches = matches;
+            this.wins = wins;
+            this.claims = claims;
+        }
+
+        public int matches() {
+            return matches;
+        }
+
+        public int wins() {
+            return wins;
+        }
+
+        public int claims() {
+            return claims;
+        }
+    }
+
     private final File directory;
     private final Logger logger;
     private final Consumer<Runnable> asyncExecutor;
     private final ExecutorService ownExecutor;
     private final List<MatchSummary> summaries = new CopyOnWriteArrayList<>();
+    private final Map<String, PlayerStats> cachedStats = new ConcurrentHashMap<>();
 
     /**
      * File work runs on one thread of its own, in order: the Bukkit async
@@ -97,6 +127,7 @@ public final class MatchHistory {
 
     public synchronized void loadSummaries() {
         summaries.clear();
+        cachedStats.clear();
         if (!directory.exists()) {
             return;
         }
@@ -110,6 +141,7 @@ public final class MatchHistory {
                 MatchRecord record = GSON.fromJson(reader, MatchRecord.class);
                 if (record != null) {
                     loaded.add(record.toSummary());
+                    accumulateStats(record);
                 }
             } catch (Exception e) {
                 if (logger != null) {
@@ -125,6 +157,7 @@ public final class MatchHistory {
         if (record == null) {
             return;
         }
+        accumulateStats(record);
         synchronized (this) {
             summaries.removeIf(s -> s.id().equalsIgnoreCase(record.id()));
             summaries.add(0, record.toSummary());
@@ -221,6 +254,7 @@ public final class MatchHistory {
     /** Empties the in-memory index right away and deletes the files on the async executor. */
     public void clearHistory() {
         summaries.clear();
+        cachedStats.clear();
         asyncExecutor.accept(this::deleteMatchFiles);
     }
 
@@ -229,6 +263,59 @@ public final class MatchHistory {
         if (files != null) {
             for (File file : files) {
                 file.delete();
+            }
+        }
+    }
+
+    public PlayerStats getPlayerStats(String playerName) {
+        if (playerName == null) {
+            return new PlayerStats(0, 0, 0);
+        }
+        return cachedStats.getOrDefault(playerName.toLowerCase(Locale.ROOT), new PlayerStats(0, 0, 0));
+    }
+
+    private void accumulateStats(MatchRecord record) {
+        if (record == null) {
+            return;
+        }
+        Set<String> matchParticipants = new HashSet<>();
+        if (record.ranking() != null) {
+            for (MatchRecord.TeamResult team : record.ranking()) {
+                if (team.players() == null) {
+                    continue;
+                }
+                for (String player : team.players()) {
+                    if (player == null || player.trim().isEmpty()) {
+                        continue;
+                    }
+                    String lower = player.toLowerCase(Locale.ROOT);
+                    matchParticipants.add(lower);
+                    PlayerStats current = cachedStats.get(lower);
+                    int prevMatches = current != null ? current.matches() : 0;
+                    int prevWins = current != null ? current.wins() : 0;
+                    int prevClaims = current != null ? current.claims() : 0;
+                    cachedStats.put(lower, new PlayerStats(prevMatches, prevWins, prevClaims + team.claims()));
+                }
+            }
+        }
+        for (String participant : matchParticipants) {
+            PlayerStats current = cachedStats.get(participant);
+            int prevMatches = current != null ? current.matches() : 0;
+            int prevWins = current != null ? current.wins() : 0;
+            int prevClaims = current != null ? current.claims() : 0;
+            cachedStats.put(participant, new PlayerStats(prevMatches + 1, prevWins, prevClaims));
+        }
+        if (record.winner() != null && record.winner().players() != null) {
+            for (String winnerPlayer : record.winner().players()) {
+                if (winnerPlayer == null || winnerPlayer.trim().isEmpty()) {
+                    continue;
+                }
+                String lower = winnerPlayer.toLowerCase(Locale.ROOT);
+                PlayerStats current = cachedStats.get(lower);
+                int prevMatches = current != null ? current.matches() : 0;
+                int prevWins = current != null ? current.wins() : 0;
+                int prevClaims = current != null ? current.claims() : 0;
+                cachedStats.put(lower, new PlayerStats(prevMatches, prevWins + 1, prevClaims));
             }
         }
     }

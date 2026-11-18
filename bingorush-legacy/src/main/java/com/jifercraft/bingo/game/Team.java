@@ -14,13 +14,15 @@ public final class Team {
 
     private int id;
     private final String name;
-    private final TextColor color;
+    private TextColor color;
+    private String tag;
     private final Set<UUID> members = new LinkedHashSet<>();
 
-    Team(int id, String name, TextColor color) {
+    Team(int id, String name, TextColor color, String tag) {
         this.id = id;
         this.name = name;
         this.color = color;
+        this.tag = tag == null || tag.trim().isEmpty() ? TeamLabel.initial(name) : tag.trim();
     }
 
     /** The id the claim board knows this team by. */
@@ -34,6 +36,19 @@ public final class Team {
 
     public TextColor color() {
         return color;
+    }
+
+    /** The short mark in front of member names, "R" for Red unless the config says otherwise. */
+    public String tag() {
+        return tag;
+    }
+
+    void recolor(TextColor newColor) {
+        color = newColor;
+    }
+
+    void retag(String newTag) {
+        tag = newTag == null || newTag.trim().isEmpty() ? TeamLabel.initial(name) : newTag.trim();
     }
 
     public Set<UUID> members() {

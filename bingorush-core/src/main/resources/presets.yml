@@ -1,0 +1,39 @@
+# Arena presets. Pick one with /bingo arena create <id> <preset>, or apply it
+# later from the arena editor. A preset only changes the settings it lists;
+# everything else keeps the defaults from config.yml or the arena's own value.
+#
+# Settings: seed, mode (items, advancements), win-mode (line, full),
+# lockout (true, false), time-limit (seconds, or 30m / 1h; 0 = no limit),
+# team-size (1-16), max-teams (2-32), countdown (seconds, 0-300),
+# lives (0 = unlimited, 1 = hardcore), border (blocks across, 0 = none, at least 64),
+# pvp (true, false), keep-inventory (true, false), daylight (cycle, day, night).
+# Border, pvp, keep-inventory and daylight only apply on the Modern jar.
+presets:
+  solo:
+    team-size: 1
+    max-teams: 8
+  duos:
+    team-size: 2
+    max-teams: 4
+  squads:
+    team-size: 4
+    max-teams: 4
+  lockout:
+    lockout: true
+    win-mode: full
+  quick:
+    win-mode: line
+    time-limit: 15m
+    border: 1000
+  hardcore:
+    lives: 1
+    time-limit: 45m
+    keep-inventory: false
+  relaxed:
+    pvp: false
+    keep-inventory: true
+    daylight: day
+  night-raid:
+    daylight: night
+    pvp: true
+    time-limit: 20m

@@ -1,15 +1,19 @@
 package com.jifercraft.bingo.config;
 
+import com.jifercraft.bingo.arena.ArenaOption;
 import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.card.ItemTier;
 import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.game.BingoGameMode;
+import com.jifercraft.bingo.game.TeamPalette;
 import com.jifercraft.bingo.season.GiftSettings;
 import com.jifercraft.bingo.season.GiftType;
 import com.jifercraft.bingo.season.SeasonSettings;
-import com.jifercraft.bingo.season.SeasonWindow;
+import com.jifercraft.bingo.season.SeasonCalendar;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
+import java.time.DateTimeException;
+import java.time.MonthDay;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -62,8 +66,8 @@ public final class BingoConfig {
     private final ChatStyle deathChat;
     private final ChatStyle advancementChat;
     private final boolean advancementTab;
-    private final boolean tabEnabled;
-    private final boolean chatEnabled;
+    private final DisplayFormats display;
+    private final List<ArenaOption> votes;
     private final long timeLimitSeconds;
     private final int countdownSeconds;
     private final int teamSize;
@@ -88,11 +92,14 @@ public final class BingoConfig {
     private final double lobbyZ;
     private final float lobbyYaw;
     private final float lobbyPitch;
-    private final Map<String, GameMapDefinition> maps;
+    private final ScoreboardDefinition lobbyScoreboard;
+    private final ScoreboardDefinition waitingScoreboard;
+    private final ScoreboardDefinition playingScoreboard;
     private final SeasonSettings seasonSettings;
+    private final List<String> warnings;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives,
-            ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, boolean tabEnabled, boolean chatEnabled,
+            ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, DisplayFormats display, List<ArenaOption> votes,
             long timeLimitSeconds,
             int countdownSeconds, int teamSize,
             boolean clearInventories, boolean scatterPlayers, int scatterRadius, LateJoin lateJoin,
@@ -101,7 +108,8 @@ public final class BingoConfig {
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin,
             int updateCheckIntervalHours, boolean historyEnabled, int historyMaxSavedMatches,
             String lobbyWorld, double lobbyX, double lobbyY, double lobbyZ, float lobbyYaw, float lobbyPitch,
-            Map<String, GameMapDefinition> maps, SeasonSettings seasonSettings) {
+            ScoreboardDefinition lobbyScoreboard, ScoreboardDefinition waitingScoreboard, ScoreboardDefinition playingScoreboard,
+            SeasonSettings seasonSettings, List<String> warnings) {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
@@ -109,8 +117,8 @@ public final class BingoConfig {
         this.deathChat = deathChat;
         this.advancementChat = advancementChat;
         this.advancementTab = advancementTab;
-        this.tabEnabled = tabEnabled;
-        this.chatEnabled = chatEnabled;
+        this.display = display;
+        this.votes = votes;
         this.timeLimitSeconds = timeLimitSeconds;
         this.countdownSeconds = countdownSeconds;
         this.teamSize = teamSize;
@@ -135,8 +143,11 @@ public final class BingoConfig {
         this.lobbyZ = lobbyZ;
         this.lobbyYaw = lobbyYaw;
         this.lobbyPitch = lobbyPitch;
-        this.maps = maps;
+        this.lobbyScoreboard = lobbyScoreboard;
+        this.waitingScoreboard = waitingScoreboard;
+        this.playingScoreboard = playingScoreboard;
         this.seasonSettings = seasonSettings;
+        this.warnings = List.copyOf(warnings);
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -171,8 +182,22 @@ public final class BingoConfig {
         ChatStyle deathChat = chatStyle(yaml, "round-chat.deaths", problems);
         ChatStyle advancementChat = chatStyle(yaml, "round-chat.advancements", problems);
         boolean advancementTab = yaml.getBoolean("advancement-tab", true);
-        boolean tabEnabled = yaml.getBoolean("tab.enabled", false);
-        boolean chatEnabled = yaml.getBoolean("chat.enabled", false);
+        DisplayFormats display = new DisplayFormats(
+                yaml.getBoolean("team-display.enabled", true),
+                yaml.getString("team-display.lobby", "<team_color><b><tag></b> "),
+                yaml.getString("team-display.playing", "<team_color><b><tag></b> "),
+                yaml.getString("team-display.spectating", "<gray>SPEC</gray> "));
+        List<ArenaOption> votes = new ArrayList<>();
+        for (String key : yaml.getStringList("match-voting.options")) {
+            ArenaOption option = ArenaOption.byKey(key);
+            if (option == null || option == ArenaOption.NAME || option == ArenaOption.SEED
+                    || option == ArenaOption.TEAM_SIZE || option == ArenaOption.MAX_TEAMS) {
+                problems.add("match-voting.options has '" + key + "', which cannot be voted; use settings like"
+                        + " mode, win-mode, time-limit, lockout, lives, pvp or daylight");
+            } else if (!votes.contains(option)) {
+                votes.add(option);
+            }
+        }
 
         long timeLimit = yaml.getLong("time-limit", 1800);
         if (timeLimit < 0) {
@@ -348,15 +373,17 @@ public final class BingoConfig {
             // no color has to be caught here or the whole plugin fails to enable.
             Object rawColor = entry.get("color");
             if (rawColor == null) {
-                problems.add("teams." + i + " (" + name + ") has no color, add one like color: \"#FF5555\"");
+                problems.add("teams." + i + " (" + name + ") has no color, add one like color: red or color: \"#FF5555\"");
                 continue;
             }
-            TextColor color = TextColor.fromHexString(rawColor.toString());
-            if (color == null) {
-                problems.add("teams." + i + " (" + name + ") has a color that is not a hex color like #FF5555");
+            Integer rgb = TeamPalette.parse(rawColor.toString());
+            if (rgb == null) {
+                problems.add("teams." + i + " (" + name + ") has the color '" + rawColor
+                        + "'; use a name like red or dark_blue, or a hex color like #FF5555");
                 continue;
             }
-            teamDefinitions.add(new TeamDefinition(name.toString(), color.value()));
+            Object tag = entry.get("tag");
+            teamDefinitions.add(new TeamDefinition(name.toString(), rgb, tag == null ? null : tag.toString()));
         }
 
         boolean updateNotifierEnabled = yaml.getBoolean("update-notifier.enabled", true);
@@ -376,47 +403,27 @@ public final class BingoConfig {
         float lobbyYaw = (float) yaml.getDouble("lobby.yaw", 0.0);
         float lobbyPitch = (float) yaml.getDouble("lobby.pitch", 0.0);
 
-        Map<String, GameMapDefinition> maps = new HashMap<>();
-        ConfigurationSection mapsSec = yaml.getConfigurationSection("maps");
-        if (mapsSec != null) {
-            for (String key : mapsSec.getKeys(false)) {
-                ConfigurationSection mapSec = mapsSec.getConfigurationSection(key);
-                if (mapSec != null) {
-                    String name = mapSec.getString("name", key);
-                    String seed = mapSec.getString("seed", "random");
-                    String modeStr = mapSec.getString("mode", "items");
-                    BingoGameMode mapMode = "advancements".equalsIgnoreCase(modeStr) ? BingoGameMode.ADVANCEMENTS : BingoGameMode.ITEMS;
-                    long limit = mapSec.getLong("time-limit", timeLimit);
-                    Location waitingLobby = null;
-                    String wWorld = mapSec.getString("waiting-lobby.world", null);
-                    if (wWorld != null && !wWorld.isEmpty()) {
-                        World worldObj = Bukkit.getWorld(wWorld);
-                        if (worldObj != null) {
-                            double wx = mapSec.getDouble("waiting-lobby.x", 0.0);
-                            double wy = mapSec.getDouble("waiting-lobby.y", 0.0);
-                            double wz = mapSec.getDouble("waiting-lobby.z", 0.0);
-                            float wYaw = (float) mapSec.getDouble("waiting-lobby.yaw", 0.0);
-                            float wPitch = (float) mapSec.getDouble("waiting-lobby.pitch", 0.0);
-                            waitingLobby = new Location(worldObj, wx, wy, wz, wYaw, wPitch);
-                        }
-                    }
-                    maps.put(key.toLowerCase(Locale.ROOT), new GameMapDefinition(key, name, seed, mapMode, limit, waitingLobby));
-                }
-            }
-        }
+        ScoreboardDefinition lobbyScoreboard = parseScoreboardSection(yaml, "lobby", null);
+        ScoreboardDefinition waitingScoreboard = parseScoreboardSection(yaml, "waiting", null);
+        ScoreboardDefinition playingScoreboard = parseScoreboardSection(yaml, "playing",
+                "<color>❙</color> <team>: <white><count>/<total></white>");
 
+        // The season is an extra. Mistakes in it switch it off with a warning
+        // instead of keeping the whole plugin idle.
+        List<String> warnings = new ArrayList<>();
         SeasonSettings seasonSettings;
         boolean seasonEnabled = yaml.getBoolean("season.enabled", false);
-        String preStart = yaml.getString("season.pre-season-start", "2026-11-25T00:00:00Z");
-        String actStart = yaml.getString("season.active-start", "2026-12-01T00:00:00Z");
-        String actEnd = yaml.getString("season.active-end", "2026-12-31T23:59:59Z");
-        String wrapEnd = yaml.getString("season.wrap-up-end", "2027-01-03T23:59:59Z");
+        String preStart = yaml.getString("season.pre-season-start", "11-25");
+        String actStart = yaml.getString("season.active-start", "12-01");
+        String actEnd = yaml.getString("season.active-end", "12-31");
+        String wrapEnd = yaml.getString("season.wrap-up-end", "01-03");
         boolean snowfall = yaml.getBoolean("season.snowfall", true);
         boolean claimFirework = yaml.getBoolean("season.claim-firework", true);
         boolean lobbySnow = yaml.getBoolean("season.lobby-snow", false);
         int lobbyRadius = yaml.getInt("season.lobby-radius", 25);
         if (lobbyRadius < 0) {
-            problems.add("season.lobby-radius is " + lobbyRadius + ", use 0 or greater");
+            warnings.add("season.lobby-radius is " + lobbyRadius + ", using 0");
+            lobbyRadius = 0;
         }
 
         boolean giftsEnabled = yaml.getBoolean("season.gifts.enabled", true);
@@ -434,10 +441,10 @@ public final class BingoConfig {
                 if (sec != null) {
                     String name = sec.getString("name", key);
                     String texture = sec.getString("texture", "");
-                    String particle = sec.getString("particle", "VILLAGER_HAPPY");
-                    String proxSound = sec.getString("proximity-sound", "block.note_block.chime");
-                    String clickSound = sec.getString("click-sound", "entity.player.levelup");
-                    String clickParticle = sec.getString("click-particle", "FIREWORK");
+                    String particle = sec.getString("particle", "");
+                    String proxSound = sec.getString("proximity-sound", "");
+                    String clickSound = sec.getString("click-sound", "");
+                    String clickParticle = sec.getString("click-particle", "");
                     List<String> rewards = sec.getStringList("rewards");
                     giftTypes.put(key, new GiftType(key, name, texture, particle, proxSound, clickSound, clickParticle, rewards));
                 }
@@ -446,25 +453,55 @@ public final class BingoConfig {
         GiftSettings giftSettings = new GiftSettings(giftsEnabled, giftsAutoSpawn, giftsCount, proximityRadius, actionbarClue, titleClue, giftTypes, Collections.emptyList(), completionRewards);
 
         try {
-            SeasonWindow window = SeasonWindow.parse(preStart, actStart, actEnd, wrapEnd);
-            seasonSettings = new SeasonSettings(seasonEnabled, window, snowfall, claimFirework, lobbySnow, lobbyRadius, giftSettings);
+            SeasonCalendar calendar = SeasonCalendar.parse(preStart, actStart, actEnd, wrapEnd,
+                    yaml.getString("season.timezone", ""));
+            seasonSettings = new SeasonSettings(seasonEnabled, calendar, snowfall, claimFirework, lobbySnow, lobbyRadius,
+                    giftSettings, lobbyExtras(yaml, warnings));
         } catch (IllegalArgumentException e) {
-            problems.add("season configuration error: " + e.getMessage());
-            seasonSettings = new SeasonSettings(false, new SeasonWindow(0, 0, 0, 0), false, false, false, 0, GiftSettings.disabled());
+            if (seasonEnabled) {
+                warnings.add("The season stays off until its dates are fixed: " + e.getMessage());
+            }
+            seasonSettings = SeasonSettings.off();
         }
 
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
-        return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, advancementTab, tabEnabled, chatEnabled, timeLimit, countdown, teamSize, clearInventories,
+        return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, advancementTab, display, votes, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
                 historyEnabled, historyMaxSavedMatches,
-                lobbyWorld, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch, maps, seasonSettings);
+                lobbyWorld, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch,
+                lobbyScoreboard, waitingScoreboard, playingScoreboard, seasonSettings, warnings);
+    }
+
+    private static SeasonSettings.Lobby lobbyExtras(ConfigurationSection yaml, List<String> warnings) {
+        MonthDay highlight = null;
+        String rawHighlight = yaml.getString("season.lobby.highlight-day", "12-25");
+        if (rawHighlight != null && !rawHighlight.trim().isEmpty()) {
+            try {
+                String[] parts = rawHighlight.trim().split("-");
+                highlight = MonthDay.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+            } catch (DateTimeException | NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                warnings.add("season.lobby.highlight-day '" + rawHighlight + "' is not a day like 12-25, so there is none");
+            }
+        }
+        return new SeasonSettings.Lobby(
+                yaml.getBoolean("season.lobby.snow-trail", true),
+                yaml.getBoolean("season.lobby.tab-header", true),
+                yaml.getBoolean("season.lobby.join-greeting", true),
+                yaml.getBoolean("season.lobby.countdown", true),
+                highlight,
+                yaml.getBoolean("season.lobby.new-year", true));
     }
 
     public SeasonSettings seasonSettings() {
         return seasonSettings;
+    }
+
+    /** Things that load fine but not as written; logged, never fatal. */
+    public List<String> warnings() {
+        return warnings;
     }
 
     public Location lobbyLocation() {
@@ -479,17 +516,6 @@ public final class BingoConfig {
 
     public boolean hasConfiguredLobby() {
         return lobbyWorld != null && !lobbyWorld.isEmpty() && Bukkit.getWorld(lobbyWorld) != null;
-    }
-
-    public Map<String, GameMapDefinition> maps() {
-        return Collections.unmodifiableMap(maps);
-    }
-
-    public GameMapDefinition getMap(String id) {
-        if (id == null) {
-            return null;
-        }
-        return maps.get(id.toLowerCase(Locale.ROOT));
     }
 
     public BingoGameMode gameMode() {
@@ -515,14 +541,14 @@ public final class BingoConfig {
         return advancementTab;
     }
 
-    /** Team colors in the player list while a round runs. */
-    public boolean tabEnabled() {
-        return tabEnabled;
+    /** Names, tags and colors in the player list, above heads and in vanilla chat. */
+    public DisplayFormats display() {
+        return display;
     }
 
-    /** The team format for chat messages while a round runs. */
-    public boolean chatEnabled() {
-        return chatEnabled;
+    /** The arena settings players can vote on in a waiting room, in menu order. */
+    public List<ArenaOption> votes() {
+        return votes;
     }
 
     public ChatStyle deathChat() {
@@ -624,5 +650,45 @@ public final class BingoConfig {
 
     public int historyMaxSavedMatches() {
         return historyMaxSavedMatches;
+    }
+
+    public boolean lobbyScoreboard() {
+        return lobbyScoreboard.enabled();
+    }
+
+    public boolean waitingScoreboard() {
+        return waitingScoreboard.enabled();
+    }
+
+    public boolean playingScoreboard() {
+        return playingScoreboard.enabled();
+    }
+
+    public ScoreboardDefinition lobbyScoreboardConfig() {
+        return lobbyScoreboard;
+    }
+
+    public ScoreboardDefinition waitingScoreboardConfig() {
+        return waitingScoreboard;
+    }
+
+    public ScoreboardDefinition playingScoreboardConfig() {
+        return playingScoreboard;
+    }
+
+    private static ScoreboardDefinition parseScoreboardSection(FileConfiguration yaml, String path, String defaultTeamFormat) {
+        if (yaml.isBoolean("scoreboards." + path)) {
+            boolean enabled = yaml.getBoolean("scoreboards." + path, true);
+            return new ScoreboardDefinition(enabled, null, Collections.emptyList(), defaultTeamFormat);
+        }
+        ConfigurationSection sec = yaml.getConfigurationSection("scoreboards." + path);
+        if (sec == null) {
+            return ScoreboardDefinition.defaultEnabled();
+        }
+        boolean enabled = sec.getBoolean("enabled", true);
+        String title = sec.getString("title", null);
+        List<String> lines = sec.getStringList("lines");
+        String teamFormat = sec.getString("team-format", defaultTeamFormat);
+        return new ScoreboardDefinition(enabled, title, lines, teamFormat);
     }
 }

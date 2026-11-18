@@ -105,4 +105,20 @@ class ConfigUpgradeTest {
         YamlConfiguration loaded = yaml(List.of("value: " + ConfigUpdater.quote(tricky)));
         assertEquals(tricky, loaded.getString("value"));
     }
+    @Test
+    void upgradingTheLanguageDropsTheRetiredSetupPanel() throws Exception {
+        List<String> template = lines("/lang/messages_en.yml");
+        YamlConfiguration folder = yaml(template);
+        // What 0.2.0-pre.4 left behind, and one key it did not have yet.
+        folder.set("setup-menu-title", "<brand> <hl>Round setup</hl>");
+        folder.set("help.setup", "<white>/bingo setup</white>");
+        folder.set("arena.created", null);
+
+        assertTrue(ConfigUpdater.mergeMissing(yaml(template), folder));
+        YamlConfiguration result = yaml(ConfigUpdater.buildUpdatedContent(template, folder).lines().toList());
+
+        assertFalse(result.contains("setup-menu-title"));
+        assertFalse(result.contains("help.setup"));
+        assertTrue(result.contains("arena.created"));
+    }
 }

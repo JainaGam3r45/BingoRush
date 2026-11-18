@@ -2,6 +2,7 @@ package com.jifercraft.bingo.game;
 
 import com.cryptomorin.xseries.XMaterial;
 import com.jifercraft.bingo.BingoRush;
+import com.jifercraft.bingo.arena.ArenaManager;
 import com.jifercraft.bingo.api.events.BingoClaimEvent;
 import com.jifercraft.bingo.api.events.BingoRoundEndEvent;
 import com.jifercraft.bingo.api.events.BingoRoundStartEvent;
@@ -74,7 +75,6 @@ public final class Game {
     private final Teams teams;
     private final CardMenu cardMenu;
     private final TeamMenu teamMenu;
-    private final SetupMenu setupMenu;
     private final Hud hud;
     private final File activeRoundFile;
     private final QueuedFileWriter roundWriter;
@@ -110,36 +110,108 @@ public final class Game {
         this.teams = teams;
         this.cardMenu = new CardMenu(plugin, teams);
         this.teamMenu = new TeamMenu(plugin, this);
-        this.setupMenu = new SetupMenu(plugin, this);
         this.hud = new Hud(plugin, this);
         this.display = new TeamDisplay(plugin);
         this.activeRoundFile = new File(plugin.getDataFolder(), "data/active-round.json");
         this.roundWriter = new QueuedFileWriter(activeRoundFile, plugin.getLogger());
         this.advancements = AdvancementSupport.load(plugin, this);
+        this.waitingBackup = new PendingRestores(new File(plugin.getDataFolder(), "data/waiting-room.json"),
+                plugin.getLogger(), advancements);
         this.pendingRestores = new PendingRestores(new File(plugin.getDataFolder(), "data/pending-restores.json"),
                 plugin.getLogger(), advancements);
     }
 
-    private String selectedMapId = "partida-1";
+    private ArenaManager arenaManager;
 
+    public void arenaManager(ArenaManager arenaManager) {
+        this.arenaManager = arenaManager;
+    }
+
+    public ArenaManager arenaManager() {
+        return arenaManager;
+    }
+
+    public Hud hud() {
+        return hud;
+    }
+
+    public GameMapDefinition getArena(String mapId) {
+        if (mapId == null) {
+            return null;
+        }
+        return arenaManager == null ? null : arenaManager.getArena(mapId);
+    }
+
+    private String selectedMapId;
+    // The arena the current round is played by; null when there are none.
+    private String roundArenaId;
+    // Inventories and game modes of players in a waiting room, on disk, so
+    // a crash before the round starts does not keep their items.
+    private final PendingRestores waitingBackup;
+
+    /** The arena the next round uses: the one picked last, or the first one. */
     public String selectedMapId() {
+        if (selectedMapId != null && getArena(selectedMapId) == null) {
+            selectedMapId = null;
+        }
+        if (selectedMapId == null && arenaManager != null && !arenaManager.getAllArenas().isEmpty()) {
+            selectedMapId = arenaManager.getAllArenas().get(0).id();
+        }
         return selectedMapId;
     }
 
     public boolean isMapSelected(String mapId) {
-        if (mapId == null) {
-            return false;
-        }
-        return selectedMapId.equalsIgnoreCase(mapId);
+        String current = selectedMapId();
+        return mapId != null && current != null && current.equalsIgnoreCase(mapId);
     }
 
-    public void selectMap(String mapId) {
-        if (mapId != null && !mapId.equalsIgnoreCase(this.selectedMapId)) {
-            this.selectedMapId = mapId;
-            if (signManager != null) {
-                signManager.updateAll();
+    /** The arena the round in progress follows, or null. */
+    public String roundArenaId() {
+        return round == null ? null : roundArenaId;
+    }
+
+    public void arenaRemoved(String arenaId) {
+        if (arenaId.equals(selectedMapId)) {
+            selectedMapId = null;
+        }
+    }
+
+    /**
+     * Picks the arena for the next round. Refused while a round runs, and
+     * while players are already waiting for another arena: switching under
+     * them would start their round with other rules.
+     */
+    public boolean selectMap(String mapId) {
+        if (isMapSelected(mapId)) {
+            return true;
+        }
+        if (round != null || hasWaitingPlayers()) {
+            return false;
+        }
+        this.selectedMapId = mapId;
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+        return true;
+    }
+
+    private boolean hasWaitingPlayers() {
+        if (round != null) {
+            return false;
+        }
+        for (UUID id : savedInventories.keySet()) {
+            if (Bukkit.getPlayer(id) != null) {
+                return true;
             }
         }
+        return false;
+    }
+
+    public boolean isLobbyVoteItem(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta() || !stack.getItemMeta().hasDisplayName()) {
+            return false;
+        }
+        return stack.getItemMeta().getDisplayName().endsWith(LegacyItems.LOBBY_VOTE_MARKER);
     }
 
     public boolean isLobbyTeamsItem(ItemStack stack) {
@@ -157,19 +229,65 @@ public final class Game {
     }
 
     public boolean isLobbyItem(ItemStack stack) {
-        return isLobbyTeamsItem(stack) || isLobbyLeaveItem(stack);
+        return isLobbyVoteItem(stack) || isLobbyTeamsItem(stack) || isLobbyLeaveItem(stack);
     }
 
     public void giveLobbyWaitingItems(Player player) {
         removeLobbyWaitingItems(player);
-        ItemStack teamsItem = LegacyItems.item(XMaterial.COMPASS,
+        ItemStack teamsItem = LegacyItems.item(XMaterial.OAK_DOOR,
                 messages().legacy(messages().render("lobby-item-teams")) + LegacyItems.LOBBY_TEAMS_MARKER,
-                null, false);
+                Collections.singletonList(messages().legacy(messages().render("lobby-item-teams-lore"))), false);
         ItemStack leaveItem = LegacyItems.item(XMaterial.RED_BED,
                 messages().legacy(messages().render("lobby-item-leave")) + LegacyItems.LOBBY_LEAVE_MARKER,
-                null, false);
-        player.getInventory().setItem(0, teamsItem);
+                Collections.singletonList(messages().legacy(messages().render("lobby-item-leave-lore"))), false);
+        player.getInventory().setItem(4, teamsItem);
         player.getInventory().setItem(8, leaveItem);
+    }
+
+    public void enterWaitingLobby(Player player, GameMapDefinition arena) {
+        UUID id = player.getUniqueId();
+        if (!savedInventories.containsKey(id)) {
+            waitingBackup.addInventory(id, player.getInventory().getContents());
+            saveAndClearInventory(player);
+        } else {
+            player.getInventory().clear();
+        }
+        if (!savedGameModes.containsKey(id)) {
+            savedGameModes.put(id, player.getGameMode());
+            waitingBackup.addGameMode(id, player.getGameMode());
+        }
+        player.setGameMode(GameMode.ADVENTURE);
+        giveLobbyWaitingItems(player);
+    }
+
+    public void leaveWaitingLobby(Player player) {
+        Team team = teams.of(player.getUniqueId());
+        if (team != null) {
+            team.remove(player.getUniqueId());
+            display.apply(player, null);
+        }
+        removeLobbyWaitingItems(player);
+        ItemStack[] saved = savedInventories.remove(player.getUniqueId());
+        if (saved != null) {
+            player.getInventory().clear();
+            player.getInventory().setContents(saved);
+        }
+        GameMode gm = savedGameModes.remove(player.getUniqueId());
+        waitingBackup.forget(player.getUniqueId());
+        if (gm != null) {
+            player.setGameMode(gm);
+        } else {
+            player.setGameMode(GameMode.SURVIVAL);
+        }
+        Location lobby = lobbyLocation();
+        if (lobby != null) {
+            player.teleport(lobby);
+        }
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+        teamMenu.refreshAll();
+        messages().send(player, "team-left");
     }
 
     public void removeLobbyWaitingItems(Player player) {
@@ -258,43 +376,6 @@ public final class Game {
     public Location lobbyLocation() {
         BingoConfig cfg = plugin.bingoConfig();
         return (cfg != null && cfg.hasConfiguredLobby()) ? cfg.lobbyLocation() : null;
-    }
-
-    public void setWaitingLobby(Player player, String mapId) {
-        if (mapId == null || mapId.trim().isEmpty()) {
-            messages().send(player, "command-usage-setwaiting");
-            return;
-        }
-        GameMapDefinition map = plugin.bingoConfig() != null ? plugin.bingoConfig().getMap(mapId) : null;
-        if (map == null) {
-            messages().send(player, "map-not-found", Placeholder.unparsed("name", mapId));
-            return;
-        }
-        Location loc = player.getLocation();
-        FileConfiguration cfg = plugin.getConfig();
-        String path = "maps." + map.id() + ".waiting-lobby";
-        cfg.set(path + ".world", loc.getWorld().getName());
-        cfg.set(path + ".x", loc.getX());
-        cfg.set(path + ".y", loc.getY());
-        cfg.set(path + ".z", loc.getZ());
-        cfg.set(path + ".yaw", (double) loc.getYaw());
-        cfg.set(path + ".pitch", (double) loc.getPitch());
-        plugin.saveConfig();
-        plugin.reloadSettings();
-        messages().send(player, "waiting-lobby-set",
-                Placeholder.unparsed("map", map.name()),
-                Placeholder.unparsed("world", loc.getWorld().getName()),
-                Placeholder.unparsed("x", String.format(Locale.ROOT, "%.1f", loc.getX())),
-                Placeholder.unparsed("y", String.format(Locale.ROOT, "%.1f", loc.getY())),
-                Placeholder.unparsed("z", String.format(Locale.ROOT, "%.1f", loc.getZ())));
-    }
-
-    public Location waitingLobbyLocation(String mapId) {
-        if (mapId == null || plugin.bingoConfig() == null) {
-            return null;
-        }
-        GameMapDefinition map = plugin.bingoConfig().getMap(mapId);
-        return map != null ? map.waitingLobby() : null;
     }
 
     /**
@@ -417,17 +498,10 @@ public final class Game {
         teamMenu.open(player);
     }
 
-    /** Opens the host panel for round settings and launch. */
-    public void openSetupMenu(Player player) {
-        setupMenu.open(player);
-    }
-
     /** A click inside one of our menus, already cancelled by the listener. */
     public void menuClick(Player player, MenuHolder menu, int slot) {
         if (menu.kind() == MenuHolder.Kind.TEAMS) {
             teamMenu.click(player, menu, slot);
-        } else if (menu.kind() == MenuHolder.Kind.SETUP) {
-            setupMenu.click(player, menu, slot);
         }
     }
 
@@ -504,15 +578,28 @@ public final class Game {
             messages().send(caller, "round-config-broken");
             return;
         }
-        BingoGameMode mode = modeOverride != null ? modeOverride : config.gameMode();
+        BingoGameMode mode;
+        WinMode winMode;
+        boolean lockout;
+        GameMapDefinition selectedArena = selectedMapId() != null ? getArena(selectedMapId()) : null;
+        if (selectedArena != null) {
+            mode = modeOverride != null ? modeOverride : selectedArena.mode();
+            winMode = winModeOverride != null ? winModeOverride : selectedArena.winMode();
+            lockout = lockoutOverride != null ? lockoutOverride : selectedArena.lockout();
+            roundTimeLimit = timeLimitOverride != null ? timeLimitOverride : selectedArena.timeLimit();
+        } else {
+            mode = modeOverride != null ? modeOverride : config.gameMode();
+            winMode = winModeOverride != null ? winModeOverride : config.winMode();
+            lockout = lockoutOverride != null ? lockoutOverride : config.lockout();
+            roundTimeLimit = timeLimitOverride != null ? timeLimitOverride : config.timeLimitSeconds();
+        }
         if (mode == BingoGameMode.ADVANCEMENTS && !ServerVersion.atLeast(12)) {
             messages().send(caller, "round-advancements-unsupported");
             return;
         }
-        WinMode winMode = winModeOverride != null ? winModeOverride : config.winMode();
-        boolean lockout = lockoutOverride != null ? lockoutOverride : config.lockout();
-        roundTimeLimit = timeLimitOverride != null ? timeLimitOverride : config.timeLimitSeconds();
-        int lives = livesOverride != null ? livesOverride : config.lives();
+        int lives = livesOverride != null ? livesOverride
+                : selectedArena != null ? selectedArena.lives() : config.lives();
+        int countdown = selectedArena != null ? selectedArena.countdown() : config.countdownSeconds();
         long seed = seedArg != null && !seedArg.trim().isEmpty()
                 ? CardGenerator.seedFrom(seedArg)
                 : nextSeed();
@@ -532,19 +619,19 @@ public final class Game {
             return;
         }
         roundConfig = config;
+        roundArenaId = selectedArena != null ? selectedArena.id() : null;
         round = new Round(seed, mode, card, new ClaimBoard(winMode, lockout), lives);
         if (signManager != null) {
             signManager.updateAll();
         }
         // The lobby menus are gone the moment a round exists, countdown included.
         teamMenu.closeAll();
-        setupMenu.closeAll();
         // Loading the tab saves every player and rereads their advancements,
         // which can take a moment: better during the countdown than on the
         // tick the round starts, and before any inventory is cleared.
         loadAdvancementTab();
         display.applyAll(teams.all());
-        int total = config.countdownSeconds();
+        int total = countdown;
         if (total > 0) {
             broadcast("round-countdown-chat", Placeholder.unparsed("count", String.valueOf(total)));
             messages().console("Countdown of <hl><seconds>s</hl> started, seed <hl><seed></hl><lockout>",
@@ -766,12 +853,17 @@ public final class Game {
     private void startSpectating(Player player) {
         savedGameModes.putIfAbsent(player.getUniqueId(), player.getGameMode());
         player.setGameMode(GameMode.SPECTATOR);
+        display.apply(player, teams.of(player.getUniqueId()));
         if (round != null && round.state() != Round.State.COUNTDOWN) {
             saveActiveRound();
         }
     }
 
     public void leaveTeam(Player player) {
+        if (round == null) {
+            leaveWaitingLobby(player);
+            return;
+        }
         Team team = teams.of(player.getUniqueId());
         if (team == null) {
             messages().send(player, "team-not-in");
@@ -868,14 +960,106 @@ public final class Game {
         return held != null && held.getType() == Material.COMPASS;
     }
 
-    public void createTeam(CommandSender caller, String name, TextColor color) {
+    /**
+     * A new team. Without a color it gets the first palette color nobody
+     * uses yet; without a tag, the first letter of its name.
+     */
+    public void createTeam(CommandSender caller, String name, Integer rgb, String tag) {
+        if (tag != null && !validTag(tag)) {
+            messages().send(caller, "team-tag-invalid", Placeholder.unparsed("value", tag));
+            return;
+        }
+        TextColor color = rgb != null ? TextColor.color(rgb) : freeColor();
         try {
-            Team team = teams.create(name, color);
-            messages().send(caller, "team-created", teamPlaceholder(team));
+            Team team = teams.create(name, color, tag);
+            messages().send(caller, "team-created", teamPlaceholder(team),
+                    Placeholder.unparsed("tag", team.tag()));
             teamMenu.refreshAll();
         } catch (IllegalArgumentException e) {
             messages().send(caller, "team-name-taken", Placeholder.unparsed("name", name));
         }
+    }
+
+    // Up to three characters fit next to a name without pushing it off the
+    // player list on a small screen.
+    private static boolean validTag(String tag) {
+        String trimmed = tag.trim();
+        return !trimmed.isEmpty() && trimmed.codePointCount(0, trimmed.length()) <= 3;
+    }
+
+    private TextColor freeColor() {
+        for (TeamPalette.Entry entry : TeamPalette.entries()) {
+            if (!colorTaken(entry.rgb())) {
+                return TextColor.color(entry.rgb());
+            }
+        }
+        return TextColor.color(TeamPalette.entries().get(teams.all().size() % TeamPalette.entries().size()).rgb());
+    }
+
+    private boolean colorTaken(int rgb) {
+        for (Team team : teams.all()) {
+            if (team.color().value() == rgb) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Fills up to the given number of teams with the palette colors and their
+     * names in the server's language. Teams that already exist stay as they are.
+     */
+    public void autoTeams(CommandSender caller, int count) {
+        if (round != null) {
+            messages().send(caller, "teams-locked");
+            return;
+        }
+        int made = 0;
+        for (TeamPalette.Entry entry : TeamPalette.entries()) {
+            if (teams.all().size() >= count) {
+                break;
+            }
+            String name = messages().plainText("team-palette." + entry.key());
+            if (colorTaken(entry.rgb()) || teams.byName(name) != null) {
+                continue;
+            }
+            teams.create(name, TextColor.color(entry.rgb()), null);
+            made++;
+        }
+        teamMenu.refreshAll();
+        display.applyAll(teams.all());
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+        messages().send(caller, "team-auto", Placeholder.unparsed("made", String.valueOf(made)),
+                Placeholder.unparsed("total", String.valueOf(teams.all().size())));
+    }
+
+    public void recolorTeam(CommandSender caller, String name, int rgb) {
+        Team team = teams.byName(name);
+        if (team == null) {
+            messages().send(caller, "team-not-found", Placeholder.unparsed("name", name));
+            return;
+        }
+        team.recolor(TextColor.color(rgb));
+        teamMenu.refreshAll();
+        display.applyAll(teams.all());
+        messages().send(caller, "team-recolored", teamPlaceholder(team));
+    }
+
+    public void retagTeam(CommandSender caller, String name, String tag) {
+        Team team = teams.byName(name);
+        if (team == null) {
+            messages().send(caller, "team-not-found", Placeholder.unparsed("name", name));
+            return;
+        }
+        if (!validTag(tag)) {
+            messages().send(caller, "team-tag-invalid", Placeholder.unparsed("value", tag));
+            return;
+        }
+        team.retag(tag);
+        display.applyAll(teams.all());
+        messages().send(caller, "team-retagged", teamPlaceholder(team), Placeholder.unparsed("tag", team.tag()));
     }
 
     public void removeTeam(CommandSender caller, String name) {
@@ -1297,7 +1481,6 @@ public final class Game {
         cancelTasks();
         cardMenu.closeAll();
         teamMenu.closeAll();
-        setupMenu.closeAll();
         hud.hideAll();
         if (round == null) {
             restoreInventories();
@@ -1307,6 +1490,10 @@ public final class Game {
         advancements.silenceAnnouncements(false);
         display.applyAll(teams.all());
         // Last, so whatever restoreInventories queued above reaches the disk.
+        if (round == null) {
+            waitingBackup.clear();
+        }
+        waitingBackup.close();
         pendingRestores.close();
         round = null;
         roundConfig = null;
@@ -1342,16 +1529,28 @@ public final class Game {
 
     /** A player left the server. */
     public void playerQuit(UUID playerId) {
+        if (round == null && savedInventories.containsKey(playerId)) {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                removeLobbyWaitingItems(player);
+                player.getInventory().setContents(savedInventories.remove(playerId));
+                GameMode mode = savedGameModes.remove(playerId);
+                if (mode != null) {
+                    player.setGameMode(mode);
+                }
+                waitingBackup.forget(playerId);
+            }
+        }
         menuClosed(playerId);
         cardNotice.remove(playerId);
         display.forget(playerId);
+        hud.playerQuit(playerId);
     }
 
     /** A player closed one of our menus; stop tracking it everywhere. */
     public void menuClosed(UUID playerId) {
         cardMenu.forget(playerId);
         teamMenu.forget(playerId);
-        setupMenu.forget(playerId);
     }
 
     private long nextSeed() {
@@ -1364,6 +1563,13 @@ public final class Game {
     }
 
     private int cap(BingoConfig config) {
+        String arenaId = round != null ? roundArenaId : selectedMapId();
+        if (arenaId != null) {
+            GameMapDefinition a = getArena(arenaId);
+            if (a != null) {
+                return a.teamSize();
+            }
+        }
         return config == null ? Integer.MAX_VALUE : config.teamSize();
     }
 
@@ -1383,11 +1589,10 @@ public final class Game {
             beginRun();
         } else {
             hud.countdownTick(secondsLeft);
-            if (plugin.season() != null && plugin.bingoConfig() != null) {
-                Location lobby = plugin.bingoConfig().lobbyLocation();
-                if (lobby != null) {
-                    plugin.season().onCountdownSnow(lobby);
-                }
+            if (plugin.season() != null) {
+                GameMapDefinition arena = getArena(roundArenaId);
+                Location where = arena != null ? arena.waitingLobby() : null;
+                plugin.season().onCountdownSnow(where != null ? where : lobbyLocation());
             }
         }
     }
@@ -1493,11 +1698,14 @@ public final class Game {
         removeCardItemsFromAll();
         retireAdvancementTab();
         advancements.silenceAnnouncements(false);
-        display.applyAll(teams.all());
         roundWriter.delete();
+        waitingBackup.clear();
+        roundArenaId = null;
         roundRestoredUnfinished = false;
         round = null;
         roundConfig = null;
+        // After round = null, or everyone keeps their in-round prefix.
+        display.applyAll(teams.all());
         teleportAllToLobby();
         if (signManager != null) {
             signManager.updateAll();
@@ -1645,6 +1853,17 @@ public final class Game {
             plugin.getLogger().severe("Failed to restore saved round from "
                     + activeRoundFile.getPath() + ": " + e.getMessage());
         }
+    }
+
+    /** Copies what waiting players were owed into the pending restores, after a crash. */
+    public void recoverWaitingRoom() {
+        for (UUID id : waitingBackup.players()) {
+            if (round != null && savedInventories.containsKey(id)) {
+                continue;
+            }
+            pendingRestores.adopt(id, waitingBackup.get(id));
+        }
+        waitingBackup.clear();
     }
 
     public File activeRoundFile() {
@@ -1931,6 +2150,7 @@ public final class Game {
         }
         if (current.isEliminated(player.getUniqueId())) {
             player.setGameMode(GameMode.SPECTATOR);
+            display.apply(player, teams.of(player.getUniqueId()));
             messages().send(player, "eliminated-spectator");
             return;
         }
@@ -2099,8 +2319,10 @@ public final class Game {
         }
     }
 
+    // putIfAbsent: a player who came through a waiting room already has
+    // their real inventory saved, and the one they hold now is empty.
     private void saveAndClearInventory(Player player) {
-        savedInventories.put(player.getUniqueId(), player.getInventory().getContents());
+        savedInventories.putIfAbsent(player.getUniqueId(), player.getInventory().getContents());
         player.getInventory().clear();
     }
 

@@ -68,7 +68,7 @@ public final class SignManager implements Listener {
     }
 
     private void renderSign(Sign sign, String mapId) {
-        GameMapDefinition map = plugin.bingoConfig() != null ? plugin.bingoConfig().getMap(mapId) : null;
+        GameMapDefinition map = game.getArena(mapId);
         String mapName = map != null ? map.name() : mapId;
 
         org.bukkit.block.sign.SignSide side = sign.getSide(org.bukkit.block.sign.Side.FRONT);
@@ -88,7 +88,7 @@ public final class SignManager implements Listener {
         }
         side.line(2, plugin.messages().render(statusKey));
         int current = isCurrentMap ? game.teams().totalMembers() : 0;
-        int max = game.teams().all().size() * game.teamSizeCap();
+        int max = map != null ? map.maxPlayers() : (game.teams().all().size() * game.teamSizeCap());
         side.line(3, Component.text(current + "/" + max, NamedTextColor.GRAY));
         sign.update(true, false);
         updateAttachedBlock(sign, round, isCurrentMap);
@@ -138,7 +138,7 @@ public final class SignManager implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        if (!player.hasPermission("bingo.admin")) {
+        if (!player.hasPermission("bingo.admin.arena")) {
             plugin.messages().send(player, "no-permission");
             return;
         }
@@ -169,13 +169,21 @@ public final class SignManager implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
         if (game.round() == null) {
-            game.selectMap(match.mapId());
-            game.giveLobbyWaitingItems(player);
-            Location waitingLobby = game.waitingLobbyLocation(match.mapId());
-            if (waitingLobby != null) {
-                player.teleport(waitingLobby);
+            GameMapDefinition arena = game.getArena(match.mapId());
+            if (arena == null) {
+                plugin.messages().send(player, "arena.not-found", Placeholder.unparsed("arena", match.mapId()));
+                return;
             }
-            game.openTeamMenu(player);
+            if (!game.selectMap(arena.id())) {
+                plugin.messages().send(player, "arena.select-busy");
+                return;
+            }
+            if (arena.waitingLobby() != null && arena.waitingLobby().getWorld() != null) {
+                player.teleport(arena.waitingLobby());
+                game.enterWaitingLobby(player, arena);
+            } else if (!plugin.matchWorldManager().sendToWaitingLobby(player, arena, true)) {
+                plugin.messages().send(player, "arena.world-unavailable", Placeholder.unparsed("arena", arena.id()));
+            }
         } else if (game.isMapSelected(match.mapId())) {
             game.randomJoin(player);
         } else {
@@ -188,10 +196,10 @@ public final class SignManager implements Listener {
         Block block = event.getBlock();
         Player player = event.getPlayer();
 
-        // 1. Direct sign break
+        // The sign itself.
         SignStorage.SavedSign directMatch = findSign(block);
         if (directMatch != null) {
-            if (!player.hasPermission("bingo.admin")) {
+            if (!player.hasPermission("bingo.admin.arena")) {
                 event.setCancelled(true);
                 plugin.messages().send(player, "sign-cannot-break");
                 return;
@@ -201,10 +209,10 @@ public final class SignManager implements Listener {
             plugin.messages().send(player, "sign-removed");
         }
 
-        // 2. Break of the support block holding an attached sign
+        // The block a wall or standing sign hangs on.
         List<SignStorage.SavedSign> attachedSigns = findSignsAttachedTo(block);
         if (!attachedSigns.isEmpty()) {
-            if (!player.hasPermission("bingo.admin")) {
+            if (!player.hasPermission("bingo.admin.arena")) {
                 event.setCancelled(true);
                 plugin.messages().send(player, "sign-cannot-break");
                 return;

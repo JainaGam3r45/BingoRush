@@ -3,6 +3,9 @@ package com.jifercraft.bingo.game;
 import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.config.BingoConfig;
+import com.jifercraft.bingo.config.GameMapDefinition;
+import com.jifercraft.bingo.config.ScoreboardDefinition;
+import com.jifercraft.bingo.history.MatchHistory;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import io.papermc.paper.scoreboard.numbers.NumberFormat;
@@ -24,7 +27,9 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -56,6 +61,9 @@ public final class Hud {
     private long limitSeconds;
     private final Map<UUID, Scoreboard> previousScoreboards = new HashMap<>();
     private final Set<String> activeEntries = new HashSet<>();
+    private final Map<UUID, Scoreboard> lobbyScoreboards = new HashMap<>();
+    private final Map<UUID, Scoreboard> previousLobbyScoreboards = new HashMap<>();
+    private BukkitTask lobbyTask;
 
     public Hud(BingoRush plugin, Game game) {
         this.plugin = plugin;
@@ -66,15 +74,10 @@ public final class Hud {
     public void roundStarted(long timeLimitSeconds) {
         limitSeconds = timeLimitSeconds;
         totalMs = timeLimitSeconds * 1000;
-        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-        sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY,
-                plugin.messages().render("sidebar-title"));
-        sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
-        sidebar.numberFormat(NumberFormat.blank());
-        game.display().registerOnScoreboard(scoreboard, game.teams().all());
-        for (Player player : participants()) {
-            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
-            player.setScoreboard(scoreboard);
+        if (playingScoreboardEnabled()) {
+            buildPlayingScoreboard();
+        } else {
+            restoreLobbyScoreboards();
         }
         if (timeLimitSeconds > 0) {
             bossBar = BossBar.bossBar(Component.empty(), 1.0f, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
@@ -99,19 +102,33 @@ public final class Hud {
     public void restorePaused(long timeLimitSeconds) {
         limitSeconds = timeLimitSeconds;
         totalMs = timeLimitSeconds * 1000;
-        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-        sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY,
-                plugin.messages().render("sidebar-title"));
-        sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
-        sidebar.numberFormat(NumberFormat.blank());
-        for (Player player : participants()) {
-            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
-            player.setScoreboard(scoreboard);
+        if (playingScoreboardEnabled()) {
+            buildPlayingScoreboard();
         }
         if (timeLimitSeconds > 0) {
             bossBar = BossBar.bossBar(Component.empty(), 1.0f, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
         }
         refresh();
+    }
+
+    private boolean playingScoreboardEnabled() {
+        return plugin.bingoConfig() == null || plugin.bingoConfig().playingScoreboard();
+    }
+
+    private void buildPlayingScoreboard() {
+        scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+        ScoreboardDefinition cfg = plugin.bingoConfig() != null ? plugin.bingoConfig().playingScoreboardConfig() : null;
+        Component title = (cfg != null && cfg.title() != null && !cfg.title().isBlank())
+                ? plugin.messages().renderTemplate(cfg.title())
+                : plugin.messages().render("scoreboard.playing.title");
+        sidebar = scoreboard.registerNewObjective("bingo", Criteria.DUMMY, title);
+        sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
+        sidebar.numberFormat(NumberFormat.blank());
+        game.display().registerOnScoreboard(scoreboard, game.teams().all());
+        for (Player player : participants()) {
+            previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
+            player.setScoreboard(scoreboard);
+        }
     }
 
     /** Once a second while the round runs: the clock everywhere it shows. */
@@ -243,25 +260,55 @@ public final class Hud {
 
         record SidebarLine(String entry, Component component) {
         }
+        Component server = plugin.messages().render("scoreboard.server");
         List<SidebarLine> lines = new ArrayList<>();
-        lines.add(new SidebarLine("sep1", plugin.messages().render("sidebar-separator")));
-        lines.add(new SidebarLine("time", plugin.messages().render("sidebar-time",
-                Placeholder.unparsed("time", timeStr))));
-        lines.add(new SidebarLine("blank1", Component.empty()));
-        lines.add(new SidebarLine("teams_header", plugin.messages().render("sidebar-teams-header")));
-        for (Team team : game.teams().all()) {
-            if (team.members().isEmpty()) {
-                continue;
+        ScoreboardDefinition cfg = plugin.bingoConfig() != null ? plugin.bingoConfig().playingScoreboardConfig() : null;
+        if (cfg != null && !cfg.lines().isEmpty()) {
+            String teamFmt = cfg.teamFormat() != null && !cfg.teamFormat().isBlank()
+                    ? cfg.teamFormat()
+                    : "<color>❙</color> <team>: <white><count>/<total></white>";
+            int lineIdx = 0;
+            for (String raw : cfg.lines()) {
+                if (raw.trim().equalsIgnoreCase("<teams>") || raw.trim().equalsIgnoreCase("%teams%")) {
+                    for (Team team : game.teams().all()) {
+                        if (team.members().isEmpty()) {
+                            continue;
+                        }
+                        Component teamLine = plugin.messages().renderTemplate(teamFmt,
+                                TagResolver.resolver("color", Tag.styling(team.color())),
+                                Game.teamPlaceholder(team),
+                                Placeholder.unparsed("count", String.valueOf(game.round().board().count(team.id()))),
+                                Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)));
+                        lines.add(new SidebarLine("team-" + team.id(), teamLine));
+                    }
+                } else {
+                    Component lineComp = plugin.messages().renderTemplate(raw,
+                            Placeholder.unparsed("time", timeStr),
+                            Placeholder.component("server", server));
+                    lines.add(new SidebarLine("line_" + (lineIdx++), lineComp));
+                }
             }
-            lines.add(new SidebarLine("team-" + team.id(), plugin.messages().render("sidebar-team-entry",
-                    TagResolver.resolver("color", Tag.styling(team.color())),
-                    Game.teamPlaceholder(team),
-                    Placeholder.unparsed("count", String.valueOf(game.round().board().count(team.id()))),
-                    Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)))));
+        } else {
+            lines.add(new SidebarLine("sep1", plugin.messages().render("scoreboard.playing.separator")));
+            lines.add(new SidebarLine("time", plugin.messages().render("scoreboard.playing.time",
+                    Placeholder.unparsed("time", timeStr))));
+            lines.add(new SidebarLine("blank1", Component.empty()));
+            lines.add(new SidebarLine("teams_header", plugin.messages().render("scoreboard.playing.teams-header")));
+            for (Team team : game.teams().all()) {
+                if (team.members().isEmpty()) {
+                    continue;
+                }
+                lines.add(new SidebarLine("team-" + team.id(), plugin.messages().render("scoreboard.playing.team-line",
+                        TagResolver.resolver("color", Tag.styling(team.color())),
+                        Game.teamPlaceholder(team),
+                        Placeholder.unparsed("count", String.valueOf(game.round().board().count(team.id()))),
+                        Placeholder.unparsed("total", String.valueOf(BingoCard.CELLS)))));
+            }
+            lines.add(new SidebarLine("blank2", Component.empty()));
+            lines.add(new SidebarLine("sep2", plugin.messages().render("scoreboard.playing.separator")));
+            lines.add(new SidebarLine("footer", plugin.messages().render("scoreboard.playing.footer",
+                    Placeholder.component("server", server))));
         }
-        lines.add(new SidebarLine("blank2", Component.empty()));
-        lines.add(new SidebarLine("sep2", plugin.messages().render("sidebar-separator")));
-        lines.add(new SidebarLine("footer", plugin.messages().render("sidebar-footer")));
 
         Set<String> currentEntries = new HashSet<>();
         int score = lines.size();
@@ -337,5 +384,225 @@ public final class Hud {
             }
         }
         return players;
+    }
+
+    public void startLobbyTask() {
+        if (lobbyTask != null) {
+            return;
+        }
+        lobbyTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickLobbyScoreboards, 20L, 20L);
+    }
+
+    public void stopLobbyTask() {
+        if (lobbyTask != null) {
+            lobbyTask.cancel();
+            lobbyTask = null;
+        }
+        restoreLobbyScoreboards();
+    }
+
+    public void playerQuit(UUID playerId) {
+        lobbyScoreboards.remove(playerId);
+        previousLobbyScoreboards.remove(playerId);
+        previousScoreboards.remove(playerId);
+    }
+
+    private void tickLobbyScoreboards() {
+        if (game.round() != null) {
+            return;
+        }
+        BingoConfig config = plugin.bingoConfig();
+        if (config == null) {
+            return;
+        }
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            GameMapDefinition arena = resolveWaitingArena(player);
+            if (arena != null && config.waitingScoreboard()) {
+                renderWaitingScoreboard(player, arena);
+            } else if (arena == null && config.lobbyScoreboard()) {
+                renderMainLobbyScoreboard(player);
+            } else {
+                restoreLobbyScoreboard(player);
+            }
+        }
+    }
+
+    public GameMapDefinition resolveWaitingArena(Player player) {
+        String arenaId = game.matchWorldManager() != null ? game.matchWorldManager().arenaIdOf(player.getWorld()) : null;
+        if (arenaId != null) {
+            return game.getArena(arenaId);
+        }
+        if (game.arenaManager() != null) {
+            for (GameMapDefinition a : game.arenaManager().getAllArenas()) {
+                if (a.waitingLobby() != null && a.waitingLobby().getWorld() != null
+                        && a.waitingLobby().getWorld().equals(player.getWorld())
+                        && a.waitingLobby().distanceSquared(player.getLocation()) < 400) {
+                    return a;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void renderWaitingScoreboard(Player player, GameMapDefinition arena) {
+        Scoreboard sb = lobbyScoreboardFor(player);
+        ScoreboardDefinition cfg = plugin.bingoConfig() != null ? plugin.bingoConfig().waitingScoreboardConfig() : null;
+        Component title = (cfg != null && cfg.title() != null && !cfg.title().isBlank())
+                ? plugin.messages().renderTemplate(cfg.title())
+                : plugin.messages().render("scoreboard.waiting.title");
+        Objective obj = sb.getObjective("bingo_hud");
+        if (obj == null) {
+            obj = sb.registerNewObjective("bingo_hud", Criteria.DUMMY, title);
+            obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+            obj.numberFormat(NumberFormat.blank());
+        } else {
+            obj.displayName(title);
+        }
+
+        Team team = game.teams().of(player.getUniqueId());
+        Component teamComp = team != null
+                ? Component.text(team.name(), team.color())
+                : plugin.messages().render("scoreboard.no-team");
+
+        String modeKey = switch (arena.teamSize()) {
+            case 1 -> "scoreboard.waiting.modes.solo";
+            case 2 -> "scoreboard.waiting.modes.duo";
+            case 3 -> "scoreboard.waiting.modes.trio";
+            case 4 -> "scoreboard.waiting.modes.squad";
+            default -> "scoreboard.waiting.modes.custom";
+        };
+        Component mode = plugin.messages().render(modeKey,
+                Placeholder.unparsed("size", String.valueOf(arena.teamSize())));
+
+        int currentPlayers = game.matchWorldManager() != null ? game.matchWorldManager().playersIn(arena.id()).size() : 0;
+        Component server = plugin.messages().render("scoreboard.server");
+
+        BingoGameMode activeGameMode = game.modeVoteManager() != null
+                ? game.modeVoteManager().applyVotes(arena).mode()
+                : arena.mode();
+        Component gameModeComp = plugin.messages().render(
+                activeGameMode == BingoGameMode.ITEMS ? "arena-menu.mode-items" : "arena-menu.mode-advancements");
+
+        TagResolver[] placeholders = new TagResolver[] {
+                Placeholder.unparsed("arena", arena.name()),
+                Placeholder.component("mode", mode),
+                Placeholder.component("gamemode", gameModeComp),
+                Placeholder.component("game_mode", gameModeComp),
+                Placeholder.unparsed("players", String.valueOf(currentPlayers)),
+                Placeholder.unparsed("max", String.valueOf(arena.maxPlayers())),
+                Placeholder.component("team", teamComp),
+                Placeholder.component("status", plugin.messages().render("scoreboard.waiting.state-waiting")),
+                Placeholder.component("server", server)
+        };
+
+        List<Component> lines = (cfg != null && !cfg.lines().isEmpty())
+                ? plugin.messages().renderTemplateLines(cfg.lines(), placeholders)
+                : plugin.messages().renderLines("scoreboard.waiting.lines", placeholders);
+
+        applyScoreboardLines(sb, obj, lines);
+        showLobbyScoreboard(player, sb);
+    }
+
+    private void renderMainLobbyScoreboard(Player player) {
+        Scoreboard sb = lobbyScoreboardFor(player);
+        ScoreboardDefinition cfg = plugin.bingoConfig() != null ? plugin.bingoConfig().lobbyScoreboardConfig() : null;
+        Component title = (cfg != null && cfg.title() != null && !cfg.title().isBlank())
+                ? plugin.messages().renderTemplate(cfg.title())
+                : plugin.messages().render("scoreboard.lobby.title");
+        Objective obj = sb.getObjective("bingo_hud");
+        if (obj == null) {
+            obj = sb.registerNewObjective("bingo_hud", Criteria.DUMMY, title);
+            obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+            obj.numberFormat(NumberFormat.blank());
+        } else {
+            obj.displayName(title);
+        }
+
+        MatchHistory.PlayerStats stats = plugin.matchHistory() != null
+                ? plugin.matchHistory().getPlayerStats(player.getName())
+                : new MatchHistory.PlayerStats(0, 0, 0);
+
+        Component season = plugin.messages().render(seasonKey());
+        Component server = plugin.messages().render("scoreboard.server");
+
+        TagResolver[] placeholders = new TagResolver[] {
+                Placeholder.unparsed("player", player.getName()),
+                Placeholder.unparsed("matches", String.valueOf(stats.matches())),
+                Placeholder.unparsed("wins", String.valueOf(stats.wins())),
+                Placeholder.unparsed("cells", String.valueOf(stats.claims())),
+                Placeholder.component("season", season),
+                Placeholder.unparsed("online", String.valueOf(Bukkit.getOnlinePlayers().size())),
+                Placeholder.component("server", server)
+        };
+
+        List<Component> lines = (cfg != null && !cfg.lines().isEmpty())
+                ? plugin.messages().renderTemplateLines(cfg.lines(), placeholders)
+                : plugin.messages().renderLines("scoreboard.lobby.lines", placeholders);
+
+        applyScoreboardLines(sb, obj, lines);
+        showLobbyScoreboard(player, sb);
+    }
+
+    private String seasonKey() {
+        if (plugin.season() == null || plugin.season().currentPhase() == null) {
+            return "scoreboard.season.inactive";
+        }
+        return switch (plugin.season().currentPhase()) {
+            case PRE_SEASON -> "scoreboard.season.pre-season";
+            case ACTIVE -> "scoreboard.season.active";
+            case WRAP_UP -> "scoreboard.season.wrap-up";
+            default -> "scoreboard.season.inactive";
+        };
+    }
+
+    private Scoreboard lobbyScoreboardFor(Player player) {
+        UUID playerId = player.getUniqueId();
+        Scoreboard sb = lobbyScoreboards.get(playerId);
+        if (sb == null) {
+            sb = Bukkit.getScoreboardManager().getNewScoreboard();
+            game.display().registerOnScoreboard(sb, game.teams().all());
+            lobbyScoreboards.put(playerId, sb);
+            previousLobbyScoreboards.put(playerId, player.getScoreboard());
+        }
+        return sb;
+    }
+
+    private void showLobbyScoreboard(Player player, Scoreboard sb) {
+        if (!player.getScoreboard().equals(sb)) {
+            player.setScoreboard(sb);
+        }
+    }
+
+    private void restoreLobbyScoreboard(Player player) {
+        Scoreboard own = lobbyScoreboards.remove(player.getUniqueId());
+        Scoreboard previous = previousLobbyScoreboards.remove(player.getUniqueId());
+        if (own != null && player.getScoreboard().equals(own)) {
+            player.setScoreboard(previous != null ? previous : Bukkit.getScoreboardManager().getMainScoreboard());
+        }
+    }
+
+    private void restoreLobbyScoreboards() {
+        for (UUID playerId : new HashSet<>(lobbyScoreboards.keySet())) {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                restoreLobbyScoreboard(player);
+            }
+        }
+        lobbyScoreboards.clear();
+        previousLobbyScoreboards.clear();
+    }
+
+    private void applyScoreboardLines(Scoreboard sb, Objective obj, List<Component> lines) {
+        int score = lines.size();
+        for (int i = 0; i < lines.size(); i++) {
+            String entry = "line_" + i;
+            Score s = obj.getScore(entry);
+            s.customName(lines.get(i));
+            s.setScore(score--);
+        }
+        for (int i = lines.size(); i < 16; i++) {
+            sb.resetScores("line_" + i);
+        }
     }
 }

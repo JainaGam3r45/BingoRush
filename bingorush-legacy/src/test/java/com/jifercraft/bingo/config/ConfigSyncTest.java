@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,6 +32,10 @@ class ConfigSyncTest {
      */
     private static final Set<String> INTENTIONAL_DIFFERENCES;
 
+    /** Keys only the Modern jar reads: it makes a world per arena and runs the votes. */
+    private static final Set<String> MODERN_ONLY = new HashSet<>(Arrays.asList(
+            "empty-world-cleanup-seconds", "match-voting", "match-voting.enabled", "match-voting.options"));
+
     static {
         Set<String> diffs = new HashSet<>();
         diffs.add("round-chat.advancements");
@@ -52,6 +57,7 @@ class ConfigSyncTest {
         Map<String, Object> modernValues = new HashMap<>();
         flatten("", modernConfig, modernKeys, modernValues);
 
+        modernKeys.removeAll(MODERN_ONLY);
         // All keys present in legacy must be in modern, and vice versa.
         assertEquals(legacyKeys, modernKeys, "Config keys in Legacy and Modern have drifted");
 

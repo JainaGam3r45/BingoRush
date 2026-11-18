@@ -7,6 +7,10 @@
 # messages_<code>.yml, translate it and put the code here.
 language: en
 
+# The round settings below (game-mode down to lives, and time-limit,
+# countdown and team-size) are what a new arena starts with, and what a
+# round uses when there are no arenas and it is played in the main world.
+
 # Game mode: "items" for classic item collection, "advancements" for vanilla
 # advancement hunt.
 game-mode: items
@@ -49,19 +53,29 @@ lobby:
   yaw: 0.0
   pitch: 0.0
 
-# Available game maps for signs and /bingo randomjoin.
-# Each map can have a fixed seed or "random" for survival world seeds.
-maps:
-  partida-1:
-    name: "Partida 1"
-    seed: "random"
-    mode: items
-    time-limit: 1800
-  partida-2:
-    name: "Partida 2"
-    seed: "random"
-    mode: items
-    time-limit: 1800
+# Arenas live in arenas.yml and presets in presets.yml. Manage them in game
+# with /bingo arena, or from the console with /bingo arena create, set and
+# list. With no arenas, rounds are played in the main world.
+
+# Each arena plays in a world of its own, under world/dimensions/bingorush/.
+# Seconds an arena world may stay empty before it is unloaded and deleted;
+# the world of a round in progress is always kept. 0 keeps them until restart.
+empty-world-cleanup-seconds: 300
+
+# Players in a waiting room get an item to vote the round's settings, one
+# button for each setting listed in options (up to seven). Any arena setting
+# works except name, seed, team-size and max-teams. The most voted value
+# wins; a tie or no votes keeps the arena's own.
+match-voting:
+  enabled: true
+  options:
+    - mode
+    - win-mode
+    - time-limit
+    - lockout
+    - lives
+    - pvp
+    - daylight
 
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no
@@ -90,19 +104,35 @@ scatter-radius: 24
 # team are left alone. Anyone without a team can use /bingo spectate.
 late-join: join
 
-# Teams for the event. Each one has a name and a color, and players join with
-# /bingo join, /bingo join <team> or the /bingo teams menu. With no teams
-# here, the plugin invents one per group as players join. Teams added at
-# runtime with /bingo teams add last until the server restarts.
+# Teams for the event. Each one has a name, a color and, if you like, a tag:
+# the short mark in front of its players' names (the first letter when left
+# out). Colors are names such as red, blue, dark_green or gold, or hex like
+# "#FF5555". Players join with /bingo join, /bingo join <team> or the
+# /bingo teams menu. With no teams here, the plugin invents one per group as
+# players join. /bingo teams add, auto, color and tag change them in game
+# until the server restarts.
 teams:
   - name: Red
-    color: "#FF5555"
+    color: red
   - name: Blue
-    color: "#5555FF"
+    color: blue
   - name: Green
-    color: "#55FF55"
+    color: green
   - name: Yellow
-    color: "#FFFF55"
+    color: yellow
+
+# What shows in front of a player's name in the player list, above their head
+# and in chat, through scoreboard teams. One line for each moment:
+# waiting in the lobby, playing, and watching as a spectator (knocked out, or
+# /bingo spectate). <tag> is the team's tag, <team> its name, and
+# <team_color> paints with the team color. The name itself takes the team
+# color, gray for spectators. Turn it off when another plugin owns the
+# player list and nametags.
+team-display:
+  enabled: true
+  lobby: "<team_color><b><tag></b> "
+  playing: "<team_color><b><tag></b> "
+  spectating: "<gray>SPEC</gray> "
 
 # The 25 cells of the card come from these tiers. Each tier lists the items
 # it can draw from and how many cells it fills; the cells must add up to 25.
@@ -263,68 +293,140 @@ history:
   # The oldest matches are deleted when new ones finish. 0 disables the limit.
   max-saved-matches: 50
 
-# Seasonal event settings.
-# Automated schedule runs in UTC. When enabled, visual and festive effects
-# trigger according to the current season phase.
+# Sidebars for each stage. Turn one off (enabled: false) when another plugin
+# owns the sidebar. Lines are MiniMessage with the palette tags of the
+# language file and %placeholders%.
+scoreboards:
+  # Main lobby, between rounds.
+  lobby:
+    enabled: true
+    title: "  <brand>  "
+    lines:
+      - "<muted><st>                   </st></muted>"
+      - "<white>Player:</white> <hl>%player%</hl>"
+      - "<white>Matches:</white> <hl>%matches%</hl>"
+      - "<white>Wins:</white> <ok>%wins%</ok>"
+      - "<white>Cells:</white> <hl>%cells%</hl>"
+      - ""
+      - "<white>Season:</white> <hl>%season%</hl>"
+      - "<white>Online:</white> <ok>%online%</ok>"
+      - "<muted><st>                   </st></muted>"
+      - "<muted>%server%</muted>"
+
+  # Waiting room of an arena, before its round starts.
+  waiting:
+    enabled: true
+    title: "  <brand>  "
+    lines:
+      - "<muted><st>                   </st></muted>"
+      - "<white>Arena:</white> <hl>%arena%</hl>"
+      - "<white>Mode:</white> <hl>%mode%</hl>"
+      - "<white>Players:</white> <ok>%players%</ok><muted>/%max%</muted>"
+      - "<white>Your team:</white> %team%"
+      - ""
+      - "<white>Status:</white> %status%"
+      - "<muted><st>                   </st></muted>"
+      - "<muted>%server%</muted>"
+
+  # During a round.
+  playing:
+    enabled: true
+    title: "  <brand>  "
+    team-format: "<color>❙</color> %team%: <white>%count%/%total%</white>"
+    lines:
+      - "<muted><st>                   </st></muted>"
+      - "<white>Time:</white> <hl>%time%</hl>"
+      - ""
+      - "<white><b>Teams:</b></white>"
+      - "%teams%"
+      - ""
+      - "<muted><st>                   </st></muted>"
+      - "<muted>%server%</muted>"
+
+# Seasonal extras for the holidays: snow and snowflakes around the lobby,
+# fireworks on claims, a gift hunt, a season header in the player list and a
+# countdown to the big day. Off by default, and nothing else in the plugin
+# depends on it. Every block it places is put back when the dates run out or
+# the season is switched off, even across restarts.
 season:
-  enabled: true
-  # Scheduled dates in UTC (ISO-8601).
-  pre-season-start: "2026-11-25T00:00:00Z"
-  active-start: "2026-12-01T00:00:00Z"
-  active-end: "2026-12-31T23:59:59Z"
-  wrap-up-end: "2027-01-03T23:59:59Z"
-  # Visual effects during active season.
+  enabled: false
+  # Month-day dates ("12-01", or "12-31 23:59") come back every year; full
+  # timestamps ("2026-12-01T00:00:00Z") make a one-off season. Pre-season
+  # only announces what is coming; active is the season itself; wrap-up
+  # keeps the snow but takes the gifts down.
+  pre-season-start: "11-25"
+  active-start: "12-01"
+  active-end: "12-31"
+  wrap-up-end: "01-03"
+  # Zone the dates are read in, such as Europe/Madrid or America/Buenos_Aires.
+  # Empty uses the server's own.
+  timezone: ""
+  # Snowflakes over the lobby and during the countdown.
   snowfall: true
+  # A small firework over a player who claims a cell.
   claim-firework: true
-  lobby-snow: true
-  # Radius in blocks around lobby spawn for seasonal visual changes (0 disables).
+  # A layer of snow on the open floor around the lobby.
+  lobby-snow: false
+  # Blocks around the lobby spawn the snow and the gifts use.
   lobby-radius: 25
-  # Seasonal gift hunt in lobbies ("The Search" style hidden presents).
+  # What players in the lobby get while the season runs, playing or not.
+  lobby:
+    # Snowflakes under their feet as they walk.
+    snow-trail: true
+    # The season header and footer in the player list.
+    tab-header: true
+    # A line in chat when they join.
+    join-greeting: true
+    # Days left to the highlight day, in the action bar.
+    countdown: true
+    # The big day, month-day: fireworks over the lobby all day long.
+    highlight-day: "12-25"
+    # A title and fireworks for everyone when the year changes.
+    new-year: true
   gifts:
     enabled: true
-    # Automatically spawn gifts around the lobby location when the season is active.
+    # Hide the gifts around the lobby on their own when the season starts.
     auto-spawn: true
-    # Number of gifts to spawn automatically if no fixed locations are defined.
     auto-spawn-count: 5
-    # Detection radius in blocks for particle and sound proximity cues.
+    # Blocks from a gift where the chime and the action bar hint start.
     proximity-radius: 8.0
-    # Action bar and on-screen title clues when nearby or claiming a gift.
     actionbar-clue: true
     title-clue: true
-    # Different types of gifts with custom skull textures, particles, sounds and rewards.
+    # Each type has a name, a head texture, the particle and sounds around it
+    # (namespaced keys, plain names mean minecraft:) and console commands run
+    # as rewards, with %player% for the player's name.
     types:
       red_gift:
         name: "<red>Red Gift</red>"
         texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmNlMDRjMTZhNjk1ZmYxMTk2NDFmNDdiZjYyOGE1NTYzOWZmMzIyOWIzNWZhNTJlNDI4Y2RiMWE2ZDk2MjA1ZSJ9fX0="
-        particle: "VILLAGER_HAPPY"
+        particle: "happy_villager"
         proximity-sound: "block.note_block.chime"
         click-sound: "entity.player.levelup"
-        click-particle: "FIREWORK"
+        click-particle: "firework"
         rewards:
           - "give %player% cookie 5"
           - "xp add %player% 20"
       green_gift:
         name: "<green>Green Gift</green>"
         texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzg2MTg1NWFiODc5ZTUyNzg2OWNlNzY0MTVlOTY1MjkxNmZjOGRhY2IyZTFkYzQ2MTNlMTg3MDE1NzhjNjkifX19"
-        particle: "VILLAGER_HAPPY"
+        particle: "happy_villager"
         proximity-sound: "block.note_block.chime"
         click-sound: "entity.player.levelup"
-        click-particle: "FIREWORK"
+        click-particle: "firework"
         rewards:
           - "give %player% pumpkin_pie 3"
           - "xp add %player% 25"
       golden_gift:
         name: "<yellow>Golden Gift</yellow>"
         texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMmI1NmZhMmViNWVjOWRhY2Y0YjMzNWY5OWI4MTZhN2NkNTg0ZGE0OWQzZDFkYmExOWU4OTU1OTlmYjliIn19fQ=="
-        particle: "VILLAGER_HAPPY"
+        particle: "happy_villager"
         proximity-sound: "block.note_block.chime"
         click-sound: "entity.player.levelup"
-        click-particle: "FIREWORK"
+        click-particle: "firework"
         rewards:
           - "give %player% golden_apple 1"
           - "xp add %player% 50"
-    # Bonus rewards executed when a player finds all seasonal gifts.
+    # Commands run once for a player who finds every gift. Rewards that are
+    # also on the card are a head start when clear-inventories is off.
     completion-rewards:
-      - "give %player% diamond 3"
       - "xp add %player% 100"
-

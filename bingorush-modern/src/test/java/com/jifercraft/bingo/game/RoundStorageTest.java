@@ -381,4 +381,27 @@ class RoundStorageTest {
         assertEquals(List.of("minecraft:desert", "minecraft:taiga"),
                 restored.revokedAdvancements().get(player).get("minecraft:adventure/adventuring_time"));
     }
+    @Test
+    void theArenaAndItsSeedTravelWithTheRound(@TempDir Path tempDir) {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "minecraft:item_" + i).toList();
+        Round round = new Round(5L, new BingoCard(5L, items), new ClaimBoard(WinMode.LINE));
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+
+        RoundStorage.save(saveFile, round, 0L, Map.of(), Map.of(), Map.of(), List.of(),
+                new RoundStorage.Place("final-round", -42L));
+        RoundStorage.RestoredRound restored = RoundStorage.load(saveFile);
+
+        assertEquals(new RoundStorage.Place("final-round", -42L), restored.place());
+    }
+
+    @Test
+    void roundsSavedBeforeArenasStayInTheMainWorld(@TempDir Path tempDir) {
+        List<String> items = IntStream.range(0, 25).mapToObj(i -> "minecraft:item_" + i).toList();
+        Round round = new Round(6L, new BingoCard(6L, items), new ClaimBoard(WinMode.LINE));
+        File saveFile = tempDir.resolve("active-round.json").toFile();
+
+        RoundStorage.save(saveFile, round, 0L, Map.of());
+
+        assertNull(RoundStorage.load(saveFile).place());
+    }
 }

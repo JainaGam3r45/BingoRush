@@ -12,13 +12,14 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 /** Item building that works the same from 1.8 to 1.21. */
-final class LegacyItems {
+public final class LegacyItems {
 
     /**
      * Ends the name of the card item. Old versions have no persistent data on
      * items, and a run of color codes with nothing between them is invisible.
      */
     static final String CARD_MARKER = "§b§1§n§9§0§r";
+    static final String LOBBY_VOTE_MARKER = "§b§1§n§9§3§r";
     static final String LOBBY_TEAMS_MARKER = "§b§1§n§9§1§r";
     static final String LOBBY_LEAVE_MARKER = "§b§1§n§9§2§r";
 
@@ -36,7 +37,7 @@ final class LegacyItems {
     private LegacyItems() {
     }
 
-    static ItemStack item(XMaterial material, String name, List<String> lore, boolean glow) {
+    public static ItemStack item(XMaterial material, String name, List<String> lore, boolean glow) {
         ItemStack stack = material.parseItem();
         if (stack == null) {
             stack = XMaterial.STONE.parseItem();
@@ -45,7 +46,7 @@ final class LegacyItems {
     }
 
     /** Name, lore and glint on a stack; a null name keeps the client's own translated name. */
-    static ItemStack decorate(ItemStack stack, String name, List<String> lore, boolean glow) {
+    public static ItemStack decorate(ItemStack stack, String name, List<String> lore, boolean glow) {
         ItemMeta meta = stack.getItemMeta();
         if (meta == null) {
             return stack;

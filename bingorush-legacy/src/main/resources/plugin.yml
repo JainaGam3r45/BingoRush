@@ -16,15 +16,38 @@ commands:
     description: Opens your bingo card
   teams:
     description: Opens the team menu
-  setup:
-    description: Opens the round setup panel
 
 permissions:
   bingo.play:
-    description: Lets the player open the bingo card and join a team.
+    description: Lets the player join teams, open the card and use the lobby commands.
     default: true
   bingo.admin:
-    description: Lets the player start, stop and configure bingo rounds.
+    description: Every admin command of BingoRush.
+    default: op
+    children:
+      bingo.admin.round: true
+      bingo.admin.arena: true
+      bingo.admin.teams: true
+      bingo.admin.history: true
+      bingo.admin.reload: true
+      bingo.admin.season: true
+  bingo.admin.round:
+    description: Start, stop, pause, resume and reroll rounds, and watch any team's card.
+    default: op
+  bingo.admin.arena:
+    description: Create and edit arenas, waiting rooms, bingo signs and the lobby spawn.
+    default: op
+  bingo.admin.teams:
+    description: Add, remove, fill and clear teams.
+    default: op
+  bingo.admin.history:
+    description: Browse, export and clear the match history.
+    default: op
+  bingo.admin.reload:
+    description: Reload config.yml, arenas.yml, presets.yml and the language files.
+    default: op
+  bingo.admin.season:
+    description: Season status, phase tests, gifts and putting the lobby back.
     default: op
   bingo.update:
     description: Receives a notification when a new version is available.

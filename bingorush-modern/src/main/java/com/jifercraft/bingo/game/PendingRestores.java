@@ -9,8 +9,10 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.GameMode;
@@ -95,6 +97,30 @@ final class PendingRestores {
 
     Entry get(UUID playerId) {
         return pending.get(playerId);
+    }
+
+    Set<UUID> players() {
+        return new HashSet<>(pending.keySet());
+    }
+
+    /** Takes over an entry from another file, keeping what is already owed. */
+    void adopt(UUID playerId, Entry entry) {
+        if (entry != null) {
+            merge(playerId, entry.inventory(), entry.gameMode(), entry.advancements());
+        }
+    }
+
+    void forget(UUID playerId) {
+        if (pending.remove(playerId) != null) {
+            save();
+        }
+    }
+
+    void clear() {
+        if (!pending.isEmpty()) {
+            pending.clear();
+            save();
+        }
     }
 
     /** Gives back whatever the player is owed. */

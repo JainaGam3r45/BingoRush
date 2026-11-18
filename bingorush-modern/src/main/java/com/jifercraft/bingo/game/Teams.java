@@ -27,16 +27,21 @@ public final class Teams {
     public void reset(List<TeamDefinition> definitions) {
         teams.clear();
         for (TeamDefinition definition : definitions) {
-            create(definition.name(), TextColor.color(definition.rgb()));
+            create(definition.name(), TextColor.color(definition.rgb()), definition.tag());
         }
     }
 
     /** Throws IllegalArgumentException when the name is taken. */
     public Team create(String name, TextColor color) {
+        return create(name, color, null);
+    }
+
+    /** Throws IllegalArgumentException when the name is taken. A null tag means the first letter. */
+    public Team create(String name, TextColor color, String tag) {
         if (byName(name) != null) {
             throw new IllegalArgumentException("The team '" + name + "' already exists");
         }
-        Team team = new Team(teams.size(), name, color);
+        Team team = new Team(teams.size(), name, color, tag);
         teams.add(team);
         return team;
     }

@@ -2,6 +2,7 @@ package com.jifercraft.bingo.game;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -23,6 +24,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
@@ -50,25 +52,25 @@ public final class RoundListener implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent event) {
-        // The card menu is a read only view; the check is a tagged item in
-        // the first slot, which every opened menu always has.
+        if (event.getView().getTopInventory().getHolder() instanceof ModeVoteManager.VoteMenuHolder holder) {
+            event.setCancelled(true);
+            if (event.getClickedInventory() == event.getView().getTopInventory()
+                    && event.getWhoClicked() instanceof Player player) {
+                holder.handleClick(player, event.getSlot(), event.getClick());
+            }
+            return;
+        }
         if (game.isCardMenuView(event.getView())) {
             event.setCancelled(true);
             return;
         }
         // The lobby menus are read only too: the click runs the action the
         // item carries, and everything else in the view is blocked.
-        boolean teamMenu = game.isTeamMenuView(event.getView());
-        boolean setupMenu = !teamMenu && game.isSetupMenuView(event.getView());
-        if (teamMenu || setupMenu) {
+        if (game.isTeamMenuView(event.getView())) {
             event.setCancelled(true);
             if (event.getClickedInventory() == event.getView().getTopInventory()
                     && event.getWhoClicked() instanceof Player player) {
-                if (teamMenu) {
-                    game.teamMenuClick(player, event.getCurrentItem());
-                } else {
-                    game.setupMenuClick(player, event.getCurrentItem());
-                }
+                game.teamMenuClick(player, event.getCurrentItem());
             }
             return;
         }
@@ -83,15 +85,22 @@ public final class RoundListener implements Listener {
 
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
-        if (game.isCardMenuView(event.getView())
-                || game.isTeamMenuView(event.getView())
-                || game.isSetupMenuView(event.getView())) {
+        if (event.getView().getTopInventory().getHolder() instanceof ModeVoteManager.VoteMenuHolder
+                || game.isCardMenuView(event.getView())
+                || game.isTeamMenuView(event.getView())) {
             event.setCancelled(true);
         } else if (game.isLobbyItem(event.getOldCursor())) {
             event.setCancelled(true);
         } else if (game.blocksCardDrag(event) && event.getWhoClicked() instanceof Player player) {
             event.setCancelled(true);
             game.cardLocked(player);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        if (game.modeVoteManager() != null) {
+            game.modeVoteManager().onInventoryClose(event.getPlayer().getUniqueId());
         }
     }
 
@@ -112,6 +121,15 @@ public final class RoundListener implements Listener {
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
+        if (game.isLobbyVoteItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
+                if (game.modeVoteManager() != null) {
+                    game.modeVoteManager().promptVote(event.getPlayer());
+                }
+            }
+            return;
+        }
         if (game.isLobbyTeamsItem(event.getItem())) {
             event.setCancelled(true);
             if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
@@ -122,13 +140,7 @@ public final class RoundListener implements Listener {
         if (game.isLobbyLeaveItem(event.getItem())) {
             event.setCancelled(true);
             if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
-                Player player = event.getPlayer();
-                game.leaveTeam(player);
-                game.removeLobbyWaitingItems(player);
-                org.bukkit.Location lobby = game.lobbyLocation();
-                if (lobby != null) {
-                    player.teleport(lobby);
-                }
+                game.leaveWaitingLobby(event.getPlayer());
             }
             return;
         }
@@ -232,17 +244,22 @@ public final class RoundListener implements Listener {
         game.playerRespawned(event.getPlayer());
     }
 
-
-    @SuppressWarnings("removal")
+    // Without a bed or an anchor in the round's world, vanilla sends the
+    // player to the server spawn, out of the round. HIGH so a bed in another
+    // world does not win either.
     @EventHandler(priority = EventPriority.HIGH)
-    public void onSpawnLocation(org.spigotmc.event.player.PlayerSpawnLocationEvent event) {
-        if (game.shouldSpawnAtLobby(event.getPlayer().getUniqueId())) {
-            org.bukkit.Location lobby = game.lobbyLocation();
-            if (lobby != null) {
-                event.setSpawnLocation(lobby);
-            }
+    public void onRespawnLocation(PlayerRespawnEvent event) {
+        Location point = game.respawnLocation(event.getPlayer());
+        if (point == null) {
+            return;
+        }
+        boolean ownBed = (event.isBedSpawn() || event.isAnchorSpawn())
+                && point.getWorld().equals(event.getRespawnLocation().getWorld());
+        if (!ownBed) {
+            event.setRespawnLocation(point);
         }
     }
+
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {

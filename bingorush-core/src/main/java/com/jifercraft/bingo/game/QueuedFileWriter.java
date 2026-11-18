@@ -14,13 +14,13 @@ import java.util.logging.Logger;
  * pool gives no ordering, and a save of the active round that lands after
  * the delete at the end of a round would bring it back on the next boot.
  */
-final class QueuedFileWriter {
+public final class QueuedFileWriter {
 
     private final File file;
     private final Logger logger;
     private final ExecutorService executor;
 
-    QueuedFileWriter(File file, Logger logger) {
+    public QueuedFileWriter(File file, Logger logger) {
         this.file = file;
         this.logger = logger;
         this.executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -30,7 +30,7 @@ final class QueuedFileWriter {
         });
     }
 
-    void write(String json) {
+    public void write(String json) {
         submit(() -> {
             try {
                 AtomicFiles.write(file, json);
@@ -40,12 +40,12 @@ final class QueuedFileWriter {
         });
     }
 
-    void delete() {
+    public void delete() {
         submit(() -> AtomicFiles.delete(file));
     }
 
     /** Waits for queued writes so a final synchronous save cannot be overwritten. */
-    void close() {
+    public void close() {
         executor.shutdown();
         try {
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {

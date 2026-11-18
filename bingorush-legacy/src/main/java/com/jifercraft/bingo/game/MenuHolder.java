@@ -14,8 +14,7 @@ final class MenuHolder implements InventoryHolder {
 
     enum Kind {
         CARD,
-        TEAMS,
-        SETUP
+        TEAMS
     }
 
     private final Kind kind;

@@ -1,120 +1,128 @@
 package com.jifercraft.bingo.game;
 
 import com.jifercraft.bingo.BingoRush;
+import com.jifercraft.bingo.config.BingoConfig;
+import com.jifercraft.bingo.config.DisplayFormats;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.minimessage.tag.Tag;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 
 /**
- * Team colors in the player list and nametags managed through scoreboard teams,
- * leaving player list names, headers and chat formatting untouched.
+ * The team in front of each name: player list, nametag and vanilla chat all
+ * read the scoreboard team, so one prefix covers the three. There is one
+ * scoreboard team per bingo team and moment (lobby, playing, watching), since
+ * a knocked out member wears a different prefix than the rest of their team.
  */
 public final class TeamDisplay {
 
     private static final String PREFIX = "br_";
+    private static final String SPECTATORS = PREFIX + "spec";
     private final BingoRush plugin;
 
     TeamDisplay(BingoRush plugin) {
         this.plugin = plugin;
     }
 
+    private DisplayFormats formats() {
+        BingoConfig config = plugin.bingoConfig();
+        return config == null ? null : config.display();
+    }
+
     public void applyAll(Collection<Team> teams) {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            Team team = null;
-            for (Team t : teams) {
-                if (t.hasMember(player.getUniqueId())) {
-                    team = t;
-                    break;
-                }
-            }
-            apply(player, team);
+            apply(player, teamOf(player, teams));
         }
     }
 
     public void apply(Player player, Team team) {
-        if (player == null) {
-            return;
-        }
-        updatePlayerScoreboard(player.getScoreboard(), player, team);
-        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
-        if (mainBoard != player.getScoreboard()) {
-            updatePlayerScoreboard(mainBoard, player, team);
+        for (Scoreboard board : boardsInUse()) {
+            apply(board, player, team);
         }
     }
 
-    /**
-     * Registers all active bingo teams on the given scoreboard and adds their members.
-     * Called by Hud when constructing the round scoreboard so players see team colors.
-     */
+    /** Copies everyone's prefix onto a board the HUD just made. */
     public void registerOnScoreboard(Scoreboard board, Collection<Team> teams) {
-        if (board == null || teams == null) {
-            return;
-        }
-        for (Team team : teams) {
-            String teamKey = teamKey(team);
-            org.bukkit.scoreboard.Team sbTeam = board.getTeam(teamKey);
-            if (sbTeam == null) {
-                sbTeam = board.registerNewTeam(teamKey);
-            }
-            NamedTextColor color = NamedTextColor.nearestTo(team.color());
-            if (color != null) {
-                sbTeam.color(color);
-            }
-            for (UUID memberId : team.members()) {
-                Player member = Bukkit.getPlayer(memberId);
-                if (member != null && !sbTeam.hasEntry(member.getName())) {
-                    sbTeam.addEntry(member.getName());
-                }
-            }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            apply(board, player, teamOf(player, teams));
         }
     }
 
-    private void updatePlayerScoreboard(Scoreboard board, Player player, Team team) {
-        if (board == null || player == null) {
-            return;
+    private static Team teamOf(Player player, Collection<Team> teams) {
+        for (Team team : teams) {
+            if (team.hasMember(player.getUniqueId())) {
+                return team;
+            }
         }
+        return null;
+    }
+
+    // The lobby sidebar gives each player a board of their own, and the tab
+    // list only shows the prefixes on the board its viewer has.
+    private static Set<Scoreboard> boardsInUse() {
+        Set<Scoreboard> boards = new HashSet<>();
+        boards.add(Bukkit.getScoreboardManager().getMainScoreboard());
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            boards.add(online.getScoreboard());
+        }
+        return boards;
+    }
+
+    private DisplayFormats.State stateOf(Player player, Team team) {
+        Round round = plugin.game() == null ? null : plugin.game().round();
+        if (round == null) {
+            return team == null ? null : DisplayFormats.State.LOBBY;
+        }
+        if (round.isEliminated(player.getUniqueId())
+                || (team == null && player.getGameMode() == GameMode.SPECTATOR)) {
+            return DisplayFormats.State.SPECTATING;
+        }
+        return team == null ? null : DisplayFormats.State.PLAYING;
+    }
+
+    private void apply(Scoreboard board, Player player, Team team) {
         removeFromBingoTeams(board, player.getName());
-        if (team == null) {
+        DisplayFormats formats = formats();
+        DisplayFormats.State state = stateOf(player, team);
+        if (formats == null || !formats.enabled() || state == null) {
             return;
         }
-        String teamKey = teamKey(team);
-        org.bukkit.scoreboard.Team sbTeam = board.getTeam(teamKey);
+        String key = team == null ? SPECTATORS : PREFIX + team.id() + "_" + state.name().charAt(0);
+        org.bukkit.scoreboard.Team sbTeam = board.getTeam(key);
         if (sbTeam == null) {
-            sbTeam = board.registerNewTeam(teamKey);
+            sbTeam = board.registerNewTeam(key);
         }
-        NamedTextColor color = NamedTextColor.nearestTo(team.color());
-        if (color != null) {
-            sbTeam.color(color);
-        }
+        TextColor color = team == null || state == DisplayFormats.State.SPECTATING
+                ? NamedTextColor.GRAY : team.color();
+        TagResolver resolver = TagResolver.resolver(
+                TagResolver.resolver("team_color", Tag.styling(team == null ? NamedTextColor.GRAY : team.color())),
+                Placeholder.unparsed("tag", team == null ? "" : team.tag()),
+                Placeholder.unparsed("team", team == null ? "" : team.name()));
+        sbTeam.prefix(plugin.messages().renderTemplate(formats.prefix(state), resolver));
+        sbTeam.color(NamedTextColor.nearestTo(color));
         if (!sbTeam.hasEntry(player.getName())) {
             sbTeam.addEntry(player.getName());
         }
     }
 
     public void clear(Player player) {
-        if (player == null) {
-            return;
-        }
-        removeFromBingoTeams(player.getScoreboard(), player.getName());
-        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
-        if (mainBoard != player.getScoreboard()) {
-            removeFromBingoTeams(mainBoard, player.getName());
+        for (Scoreboard board : boardsInUse()) {
+            removeFromBingoTeams(board, player.getName());
         }
     }
 
     public void clearAll() {
-        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
-        cleanScoreboard(mainBoard);
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.getScoreboard() != mainBoard) {
-                cleanScoreboard(player.getScoreboard());
-            }
+        for (Scoreboard board : boardsInUse()) {
+            cleanScoreboard(board);
         }
     }
 
@@ -126,36 +134,22 @@ public final class TeamDisplay {
     }
 
     private void cleanScoreboard(Scoreboard board) {
-        if (board == null) {
-            return;
-        }
-        Set<org.bukkit.scoreboard.Team> toRemove = new HashSet<>();
+        Set<org.bukkit.scoreboard.Team> ours = new HashSet<>();
         for (org.bukkit.scoreboard.Team t : board.getTeams()) {
             if (t.getName().startsWith(PREFIX)) {
-                toRemove.add(t);
+                ours.add(t);
             }
         }
-        for (org.bukkit.scoreboard.Team t : toRemove) {
+        for (org.bukkit.scoreboard.Team t : ours) {
             t.unregister();
         }
     }
 
     private void removeFromBingoTeams(Scoreboard board, String entry) {
-        if (board == null || entry == null) {
-            return;
-        }
         for (org.bukkit.scoreboard.Team t : board.getTeams()) {
             if (t.getName().startsWith(PREFIX) && t.hasEntry(entry)) {
                 t.removeEntry(entry);
             }
         }
-    }
-
-    private static String teamKey(Team team) {
-        String name = team.name().toLowerCase(Locale.ROOT);
-        if (name.length() > 10) {
-            name = name.substring(0, 10);
-        }
-        return PREFIX + team.id() + "_" + name;
     }
 }

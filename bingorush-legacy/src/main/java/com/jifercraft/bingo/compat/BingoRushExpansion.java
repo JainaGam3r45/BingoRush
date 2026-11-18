@@ -162,7 +162,8 @@ public final class BingoRushExpansion extends PlaceholderExpansion {
             if (plugin.season() == null || !plugin.season().settings().enabled()) {
                 return "00h 00m 00s";
             }
-            long remaining = plugin.season().settings().window().remainingMillisInPhase(plugin.season().clock().currentTimeMillis());
+            long now = plugin.season().clock().currentTimeMillis();
+            long remaining = plugin.season().settings().windowAt(now).remainingMillisInPhase(now);
             long remSeconds = Math.max(0, remaining / 1000L);
             return String.format(Locale.ROOT, "%02dh %02dm %02ds",
                     remSeconds / 3600, (remSeconds % 3600) / 60, remSeconds % 60);

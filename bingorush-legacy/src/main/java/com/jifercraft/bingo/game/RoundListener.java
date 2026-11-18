@@ -161,6 +161,10 @@ public final class RoundListener implements Listener {
             return;
         }
         ItemStack item = event.getItem();
+        if (game.isLobbyVoteItem(item)) {
+            event.setCancelled(true);
+            return;
+        }
         if (game.isLobbyTeamsItem(item)) {
             event.setCancelled(true);
             game.openTeamMenu(event.getPlayer());
@@ -168,13 +172,7 @@ public final class RoundListener implements Listener {
         }
         if (game.isLobbyLeaveItem(item)) {
             event.setCancelled(true);
-            Player player = event.getPlayer();
-            game.leaveTeam(player);
-            game.removeLobbyWaitingItems(player);
-            Location lobby = game.lobbyLocation();
-            if (lobby != null) {
-                player.teleport(lobby);
-            }
+            game.leaveWaitingLobby(event.getPlayer());
             return;
         }
         if (game.isCardItem(item)) {

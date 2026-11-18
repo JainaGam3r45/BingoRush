@@ -145,6 +145,15 @@ public final class Messages {
         return placeholders.length == 0 ? base : TagResolver.resolver(base, TagResolver.resolver(placeholders));
     }
 
+    private static final Pattern PERCENT_PLACEHOLDER = Pattern.compile("%([a-zA-Z0-9_.-]+)%");
+
+    public static String normalizePlaceholders(String text) {
+        if (text == null || !text.contains("%")) {
+            return text;
+        }
+        return PERCENT_PLACEHOLDER.matcher(text).replaceAll("<$1>");
+    }
+
     public Component render(String key, TagResolver... placeholders) {
         // Single-argument getString reads the English defaults for missing keys.
         String raw = yaml.getString(key);
@@ -154,7 +163,44 @@ public final class Messages {
             }
             raw = key;
         }
-        return miniMessage.deserialize(raw, resolver(placeholders));
+        return miniMessage.deserialize(normalizePlaceholders(raw), resolver(placeholders));
+    }
+
+    /**
+     * A list of templates, one per line, for places that render their own
+     * layout such as the sidebars. Missing lists fall back to a single line so
+     * a custom language file keeps working with an older layout.
+     */
+    public List<Component> renderLines(String key, TagResolver... placeholders) {
+        List<String> raw = yaml.getStringList(key);
+        if (raw.isEmpty()) {
+            return Collections.singletonList(render(key, placeholders));
+        }
+        TagResolver res = resolver(placeholders);
+        List<Component> lines = new ArrayList<>();
+        for (String line : raw) {
+            lines.add(miniMessage.deserialize(normalizePlaceholders(line), res));
+        }
+        return lines;
+    }
+
+    public Component renderTemplate(String raw, TagResolver... placeholders) {
+        if (raw == null) {
+            return Component.empty();
+        }
+        return miniMessage.deserialize(normalizePlaceholders(raw), resolver(placeholders));
+    }
+
+    public List<Component> renderTemplateLines(List<String> rawLines, TagResolver... placeholders) {
+        if (rawLines == null || rawLines.isEmpty()) {
+            return Collections.emptyList();
+        }
+        TagResolver res = resolver(placeholders);
+        List<Component> lines = new ArrayList<>(rawLines.size());
+        for (String line : rawLines) {
+            lines.add(miniMessage.deserialize(normalizePlaceholders(line), res));
+        }
+        return lines;
     }
 
     /**
@@ -167,9 +213,10 @@ public final class Messages {
         if (raw == null) {
             return Collections.singletonList(render(key, placeholders));
         }
+        TagResolver res = resolver(placeholders);
         List<Component> lines = new ArrayList<>();
         for (String piece : LINE_BREAK.split(raw, -1)) {
-            lines.add(miniMessage.deserialize("<!italic>" + piece, resolver(placeholders)));
+            lines.add(miniMessage.deserialize("<!italic>" + normalizePlaceholders(piece), res));
         }
         return lines;
     }

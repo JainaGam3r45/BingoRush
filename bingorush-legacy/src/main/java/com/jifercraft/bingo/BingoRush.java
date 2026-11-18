@@ -1,6 +1,9 @@
 package com.jifercraft.bingo;
 
 import com.jifercraft.bingo.api.BingoRushAPI;
+import com.jifercraft.bingo.arena.ArenaManager;
+import com.jifercraft.bingo.arena.ArenaMenu;
+import com.jifercraft.bingo.arena.ChatPrompt;
 import com.jifercraft.bingo.compat.BingoRushExpansion;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.config.BingoConfig;
@@ -13,6 +16,7 @@ import com.jifercraft.bingo.game.SignManager;
 import com.jifercraft.bingo.game.Teams;
 import com.jifercraft.bingo.history.MatchHistory;
 import com.jifercraft.bingo.season.Season;
+import com.jifercraft.bingo.season.SeasonSettings;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import java.io.File;
 import java.io.IOException;
@@ -26,6 +30,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
+import org.bukkit.event.HandlerList;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -39,6 +44,9 @@ public final class BingoRush extends JavaPlugin {
     private UpdateChecker updateChecker;
     private MatchHistory matchHistory;
     private Season season;
+    private ArenaManager arenaManager;
+    private ArenaMenu arenaMenu;
+    private ChatPrompt chatPrompt;
 
     @Override
     public void onEnable() {
@@ -48,6 +56,11 @@ public final class BingoRush extends JavaPlugin {
                     + ". The Legacy jar covers 1.8.8 to 1.21.x; use BingoRush-Modern for this version.");
         }
         boolean spanishBefore = Messages.migrateOldMessages(this);
+        // Before the updater: it rewrites config.yml without the maps section.
+        int movedMaps = ArenaManager.migrateMaps(getDataFolder(), getLogger());
+        if (movedMaps > 0) {
+            getLogger().info("Moved " + movedMaps + " map(s) from config.yml to arenas.yml");
+        }
         File configFile = new File(getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             saveDefaultConfig();
@@ -70,7 +83,16 @@ public final class BingoRush extends JavaPlugin {
         if (bingoConfig != null) {
             teams.reset(bingoConfig.teamDefinitions());
         }
+        // After the config and the teams: new arenas start from both.
+        arenaManager = new ArenaManager(this);
+        arenaManager.load();
+        game.arenaManager(arenaManager);
+        chatPrompt = new ChatPrompt(this);
+        arenaMenu = new ArenaMenu(this, arenaManager, chatPrompt);
+        getServer().getPluginManager().registerEvents(chatPrompt, this);
+        getServer().getPluginManager().registerEvents(arenaMenu, this);
         game.loadSavedRoundIfPresent();
+        game.recoverWaitingRoom();
         game.display().applyAll(teams.all());
 
         SignManager signManager = new SignManager(this, game);
@@ -80,7 +102,7 @@ public final class BingoRush extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new RoundListener(this, game), this);
         BingoCommand commands = new BingoCommand(this, game);
-        for (String name : new String[]{"bingo", "card", "teams", "setup"}) {
+        for (String name : new String[]{"bingo", "card", "teams"}) {
             PluginCommand command = getCommand(name);
             if (command != null) {
                 command.setExecutor(commands);
@@ -136,11 +158,9 @@ public final class BingoRush extends JavaPlugin {
             updateChecker.startPeriodicCheck();
         }
 
-        if (bingoConfig != null && bingoConfig.seasonSettings() != null) {
-            season = new Season(this, bingoConfig.seasonSettings());
-            getServer().getPluginManager().registerEvents(season, this);
-            season.start();
-        }
+        startSeason();
+
+        game.hud().startLobbyTask();
 
         messages.console("Enabled <hl>v<version></hl> <muted>(<mode>, <teams> teams, Minecraft <server>)</muted>",
                 Placeholder.unparsed("version", getDescription().getVersion()),
@@ -152,11 +172,20 @@ public final class BingoRush extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (game != null) {
+            game.hud().stopLobbyTask();
+        }
         if (season != null) {
             season.stop();
         }
         if (updateChecker != null) {
             updateChecker.stopPeriodicCheck();
+        }
+        if (chatPrompt != null) {
+            chatPrompt.shutdown();
+        }
+        if (arenaManager != null) {
+            arenaManager.close();
         }
         if (game != null) {
             game.shutdown();
@@ -191,6 +220,14 @@ public final class BingoRush extends JavaPlugin {
         return matchHistory;
     }
 
+    public Game game() {
+        return game;
+    }
+
+    public Teams teams() {
+        return teams;
+    }
+
     /**
      * An inventory title. Before 1.13 titles stop at 32 characters, color
      * codes included, which a gradient title passes easily; those servers get
@@ -219,19 +256,34 @@ public final class BingoRush extends JavaPlugin {
         return plain.length() <= max ? plain : plain.substring(0, max);
     }
 
+    public ArenaManager arenaManager() {
+        return arenaManager;
+    }
+
+    public ArenaMenu arenaMenu() {
+        return arenaMenu;
+    }
+
     /**
-     * Rereads both files. A broken config keeps the previous one and prints
+     * Rereads configuration files. A broken config keeps the previous one and prints
      * every problem to the console, so the round in progress is never lost
      * over a typo. The teams are runtime state and survive a reload.
      */
     public void reloadSettings() {
-        ConfigUpdater.update(this, "config.yml");
         reloadConfig();
         game.cardsBeforeReload();
         messages.reload();
         game.cardTextChanged();
         loadConfigOrLog();
+        if (arenaManager != null) {
+            arenaManager.load();
+        }
         game.settingsReloaded();
+        if (season != null) {
+            season.stop();
+            HandlerList.unregisterAll(season);
+        }
+        startSeason();
         if (updateChecker != null) {
             if (bingoConfig == null || bingoConfig.updateNotifierEnabled()) {
                 updateChecker.check(null);
@@ -254,11 +306,23 @@ public final class BingoRush extends JavaPlugin {
         }
     }
 
+    // Always made, even when switched off: a season turned off since the last
+    // start still has blocks in the lobby to put back.
+    private void startSeason() {
+        SeasonSettings settings = bingoConfig != null ? bingoConfig.seasonSettings() : SeasonSettings.off();
+        season = new Season(this, settings);
+        getServer().getPluginManager().registerEvents(season, this);
+        season.start();
+    }
+
     private void loadConfigOrLog() {
         try {
             bingoConfig = BingoConfig.load(getConfig());
             for (String note : bingoConfig.notes()) {
                 getLogger().info(note);
+            }
+            for (String warning : bingoConfig.warnings()) {
+                getLogger().warning(warning);
             }
         } catch (IllegalArgumentException e) {
             for (String line : e.getMessage().split("\n")) {
