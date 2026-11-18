@@ -288,6 +288,9 @@ season:
     auto-spawn-count: 5
     # Detection radius in blocks for particle and sound proximity cues.
     proximity-radius: 8.0
+    # Action bar and on-screen title clues when nearby or claiming a gift.
+    actionbar-clue: true
+    title-clue: true
     # Different types of gifts with custom skull textures, particles, sounds and rewards.
     types:
       red_gift:

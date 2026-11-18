@@ -5,15 +5,18 @@ import com.cryptomorin.xseries.XMaterial;
 import com.cryptomorin.xseries.XSound;
 import com.jifercraft.bingo.BingoRush;
 import java.io.File;
-import org.bukkit.Sound;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Effect;
 import org.bukkit.Location;
@@ -293,6 +296,7 @@ public final class Season implements Listener {
             return;
         }
         double radius = settings.giftSettings().proximityRadius();
+        Map<Player, Double> nearestDistances = new HashMap<>();
 
         for (GiftLocation loc : activeGifts.values()) {
             World world = Bukkit.getWorld(loc.world());
@@ -319,11 +323,23 @@ public final class Season implements Listener {
                     float factor = (float) (1.0 - (dist / radius));
                     float pitch = 0.6f + factor * 0.9f;
                     float volume = 0.3f + factor * 0.5f;
-                    Sound s = XSound.BLOCK_NOTE_BLOCK_CHIME.parseSound();
-                    if (s != null) {
-                        player.playSound(center, s, volume, pitch);
+                    XSound.BLOCK_NOTE_BLOCK_CHIME.play(center, volume, pitch);
+
+                    Double prev = nearestDistances.get(player);
+                    if (prev == null || dist < prev) {
+                        nearestDistances.put(player, dist);
                     }
                 }
+            }
+        }
+
+        // Action bar distance clues for closest unfound gift
+        if (settings.giftSettings().actionbarClue()) {
+            for (Map.Entry<Player, Double> entry : nearestDistances.entrySet()) {
+                Player player = entry.getKey();
+                Component bar = plugin.messages().render("season.gift-proximity-actionbar",
+                        Placeholder.unparsed("distance", String.format(Locale.ROOT, "%.1f", entry.getValue())));
+                plugin.messages().audience(player).sendActionBar(bar);
             }
         }
     }
@@ -351,10 +367,7 @@ public final class Season implements Listener {
             plugin.messages().send(player, "season.gift-already-claimed",
                     Placeholder.unparsed("found", String.valueOf(claims.claimedCount(uuid))),
                     Placeholder.unparsed("total", String.valueOf(total)));
-            Sound s = XSound.BLOCK_NOTE_BLOCK_BASS.parseSound();
-            if (s != null) {
-                player.playSound(clicked.getLocation(), s, 0.6f, 0.8f);
-            }
+            XSound.BLOCK_NOTE_BLOCK_BASS.play(clicked.getLocation(), 0.6f, 0.8f);
             return;
         }
 
@@ -368,10 +381,7 @@ public final class Season implements Listener {
             clicked.getWorld().playEffect(center, Effect.valueOf("HAPPY_VILLAGER"), 0);
         } catch (IllegalArgumentException ignored) {
         }
-        Sound levelSound = XSound.ENTITY_PLAYER_LEVELUP.parseSound();
-        if (levelSound != null) {
-            player.playSound(center, levelSound, 1.0f, 1.2f);
-        }
+        XSound.ENTITY_PLAYER_LEVELUP.play(center, 1.0f, 1.2f);
 
         if (type != null) {
             for (String cmd : type.rewardCommands()) {
@@ -385,12 +395,28 @@ public final class Season implements Listener {
                 Placeholder.unparsed("found", String.valueOf(found)),
                 Placeholder.unparsed("total", String.valueOf(total)));
 
+        // Title clue for individual discovery
+        if (settings.giftSettings().titleClue()) {
+            Component titleComp = plugin.messages().render("season.gift-title");
+            Component subComp = plugin.messages().render("season.gift-subtitle",
+                    Placeholder.parsed("gift_name", giftName),
+                    Placeholder.unparsed("found", String.valueOf(found)),
+                    Placeholder.unparsed("total", String.valueOf(total)));
+            plugin.messages().audience(player).showTitle(Title.title(titleComp, subComp));
+        }
+
         if (found >= total && total > 0) {
             plugin.messages().send(player, "season.gift-all-found",
                     Placeholder.unparsed("total", String.valueOf(total)));
             for (String cmd : settings.giftSettings().completionCommands()) {
                 String formatted = cmd.replace("%player%", player.getName());
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formatted);
+            }
+            if (settings.giftSettings().titleClue()) {
+                Component allTitle = plugin.messages().render("season.gift-all-title");
+                Component allSub = plugin.messages().render("season.gift-all-subtitle",
+                        Placeholder.unparsed("total", String.valueOf(total)));
+                plugin.messages().audience(player).showTitle(Title.title(allTitle, allSub));
             }
         }
     }

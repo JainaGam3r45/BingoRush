@@ -4,13 +4,16 @@ import com.jifercraft.bingo.BingoRush;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -299,13 +302,15 @@ public final class Season implements Listener {
 
     /**
      * Periodic proximity cues for nearby players: emits particles and plays
-     * chime sound that increases in pitch the closer a player gets.
+     * chime sound that increases in pitch the closer a player gets, and optional
+     * action bar distance clues.
      */
     public void proximityTick() {
         if (!currentPhase.isVisualsActive() || !settings.giftSettings().enabled() || activeGifts.isEmpty()) {
             return;
         }
         double radius = settings.giftSettings().proximityRadius();
+        Map<Player, Double> nearestDistances = new HashMap<>();
 
         for (GiftLocation loc : activeGifts.values()) {
             World world = Bukkit.getWorld(loc.world());
@@ -332,7 +337,22 @@ public final class Season implements Listener {
                     float pitch = 0.6f + factor * 0.9f; // 0.6f up to 1.5f pitch
                     float volume = 0.3f + factor * 0.5f;
                     player.playSound(center, Sound.BLOCK_NOTE_BLOCK_CHIME, volume, pitch);
+
+                    Double prev = nearestDistances.get(player);
+                    if (prev == null || dist < prev) {
+                        nearestDistances.put(player, dist);
+                    }
                 }
+            }
+        }
+
+        // Action bar distance clues for closest unfound gift
+        if (settings.giftSettings().actionbarClue()) {
+            for (Map.Entry<Player, Double> entry : nearestDistances.entrySet()) {
+                Player player = entry.getKey();
+                Component bar = plugin.messages().render("season.gift-proximity-actionbar",
+                        Placeholder.unparsed("distance", String.format(Locale.ROOT, "%.1f", entry.getValue())));
+                player.sendActionBar(bar);
             }
         }
     }
@@ -392,6 +412,16 @@ public final class Season implements Listener {
                 Placeholder.unparsed("found", String.valueOf(found)),
                 Placeholder.unparsed("total", String.valueOf(total)));
 
+        // Title clue for individual discovery
+        if (settings.giftSettings().titleClue()) {
+            Component titleComp = plugin.messages().render("season.gift-title");
+            Component subComp = plugin.messages().render("season.gift-subtitle",
+                    Placeholder.parsed("gift_name", giftName),
+                    Placeholder.unparsed("found", String.valueOf(found)),
+                    Placeholder.unparsed("total", String.valueOf(total)));
+            player.showTitle(Title.title(titleComp, subComp));
+        }
+
         // Check if all gifts found
         if (found >= total && total > 0) {
             plugin.messages().send(player, "season.gift-all-found",
@@ -399,6 +429,12 @@ public final class Season implements Listener {
             for (String cmd : settings.giftSettings().completionCommands()) {
                 String formatted = cmd.replace("%player%", player.getName());
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formatted);
+            }
+            if (settings.giftSettings().titleClue()) {
+                Component allTitle = plugin.messages().render("season.gift-all-title");
+                Component allSub = plugin.messages().render("season.gift-all-subtitle",
+                        Placeholder.unparsed("total", String.valueOf(total)));
+                player.showTitle(Title.title(allTitle, allSub));
             }
         }
     }

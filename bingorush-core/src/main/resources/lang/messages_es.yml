@@ -327,4 +327,9 @@ season:
   gift-reset-player: "<prefix><body>Progreso de regalos reiniciado para <hl><player></hl>."
   gift-reset-all: "<prefix><body>Se reinició el progreso de regalos para todos los jugadores."
   gift-added: "<prefix><body>Se añadió un regalo <hl><type></hl> <body>en tu ubicación."
+  gift-title: "<gradient:#FFD23F:#FF8A1F><b>¡Regalo Encontrado!</b></gradient>"
+  gift-subtitle: "<gift_name> <muted>(<found>/<total>)</muted>"
+  gift-all-title: "<gradient:#55FF55:#FFFF55><b>¡Búsqueda Completada!</b></gradient>"
+  gift-all-subtitle: "<ok>¡Has encontrado los <total> regalos!</ok>"
+  gift-proximity-actionbar: "<white>❄</white> <hl>¡Regalo cercano!</hl> <muted>(<distance>m)</muted> <white>❄</white>"
 

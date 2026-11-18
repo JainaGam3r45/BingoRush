@@ -331,4 +331,9 @@ season:
   gift-reset-player: "<prefix><body>Reset gift claims for <hl><player></hl>."
   gift-reset-all: "<prefix><body>Reset all seasonal gift claims."
   gift-added: "<prefix><body>Added a <hl><type></hl> <body>gift at your location."
+  gift-title: "<gradient:#FFD23F:#FF8A1F><b>Gift Found!</b></gradient>"
+  gift-subtitle: "<gift_name> <muted>(<found>/<total>)</muted>"
+  gift-all-title: "<gradient:#55FF55:#FFFF55><b>Hunt Completed!</b></gradient>"
+  gift-all-subtitle: "<ok>You have found all <total> gifts!</ok>"
+  gift-proximity-actionbar: "<white>❄</white> <hl>Nearby Gift!</hl> <muted>(<distance>m)</muted> <white>❄</white>"
 

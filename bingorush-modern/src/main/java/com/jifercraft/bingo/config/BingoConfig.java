@@ -410,6 +410,8 @@ public final class BingoConfig {
         boolean giftsAutoSpawn = yaml.getBoolean("season.gifts.auto-spawn", true);
         int giftsCount = yaml.getInt("season.gifts.auto-spawn-count", 5);
         double proximityRadius = yaml.getDouble("season.gifts.proximity-radius", 8.0);
+        boolean actionbarClue = yaml.getBoolean("season.gifts.actionbar-clue", true);
+        boolean titleClue = yaml.getBoolean("season.gifts.title-clue", true);
         List<String> completionRewards = yaml.getStringList("season.gifts.completion-rewards");
         Map<String, GiftType> giftTypes = new LinkedHashMap<>();
         ConfigurationSection typesSec = yaml.getConfigurationSection("season.gifts.types");
@@ -428,7 +430,7 @@ public final class BingoConfig {
                 }
             }
         }
-        GiftSettings giftSettings = new GiftSettings(giftsEnabled, giftsAutoSpawn, giftsCount, proximityRadius, giftTypes, Collections.emptyList(), completionRewards);
+        GiftSettings giftSettings = new GiftSettings(giftsEnabled, giftsAutoSpawn, giftsCount, proximityRadius, actionbarClue, titleClue, giftTypes, Collections.emptyList(), completionRewards);
 
         try {
             SeasonWindow window = SeasonWindow.parse(preStart, actStart, actEnd, wrapEnd);
