@@ -333,3 +333,6 @@ season:
   gift-all-subtitle: "<ok>¡Has encontrado los <total> regalos!</ok>"
   gift-proximity-actionbar: "<white>❄</white> <hl>¡Regalo cercano!</hl> <muted>(<distance>m)</muted> <white>❄</white>"
 
+lobby-item-teams: "<yellow><b>Seleccionar Equipo</b></yellow> <gray>(Clic derecho)</gray>"
+lobby-item-leave: "<red><b>Abandonar Partida</b></red> <gray>(Clic derecho)</gray>"
+

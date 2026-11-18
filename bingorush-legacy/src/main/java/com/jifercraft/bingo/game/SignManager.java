@@ -1,5 +1,7 @@
 package com.jifercraft.bingo.game;
 
+import com.cryptomorin.xseries.XBlock;
+import com.cryptomorin.xseries.XMaterial;
 import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.config.GameMapDefinition;
 import java.io.File;
@@ -10,8 +12,10 @@ import java.util.Locale;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -64,8 +68,9 @@ public final class SignManager implements Listener {
         sign.setLine(0, plugin.messages().legacy(plugin.messages().render("brand")));
         sign.setLine(1, mapName);
         Round round = game.round();
+        boolean isCurrentMap = game.isMapSelected(mapId);
         String statusKey = "sign-status-waiting";
-        if (round != null) {
+        if (round != null && isCurrentMap) {
             if (round.state() == Round.State.COUNTDOWN) {
                 statusKey = "sign-status-starting";
             } else if (round.state() == Round.State.PAUSED) {
@@ -75,10 +80,43 @@ public final class SignManager implements Listener {
             }
         }
         sign.setLine(2, plugin.messages().legacy(plugin.messages().render(statusKey)));
-        int current = game.teams().totalMembers();
+        int current = isCurrentMap ? game.teams().totalMembers() : 0;
         int max = game.teams().all().size() * game.teamSizeCap();
         sign.setLine(3, current + "/" + max);
         sign.update(true, false);
+        updateAttachedBlock(sign, round, isCurrentMap);
+    }
+
+    private void updateAttachedBlock(Sign sign, Round round, boolean isCurrentMap) {
+        Block attached = getAttachedBlock(sign.getBlock());
+        if (attached == null) {
+            return;
+        }
+        XMaterial concrete;
+        if (round != null && isCurrentMap) {
+            if (round.state() == Round.State.COUNTDOWN) {
+                concrete = XMaterial.YELLOW_CONCRETE;
+            } else if (round.state() == Round.State.PAUSED) {
+                concrete = XMaterial.ORANGE_CONCRETE;
+            } else {
+                concrete = XMaterial.RED_CONCRETE;
+            }
+        } else {
+            concrete = XMaterial.LIME_CONCRETE;
+        }
+        if (!XBlock.isSimilar(attached, concrete) && attached.getType() != Material.AIR
+                && !attached.isLiquid() && attached.getType() != Material.BEDROCK
+                && attached.getType() != Material.BARRIER) {
+            XBlock.setType(attached, concrete);
+        }
+    }
+
+    private Block getAttachedBlock(Block block) {
+        if (block.getState().getData() instanceof org.bukkit.material.Sign) {
+            org.bukkit.material.Sign signData = (org.bukkit.material.Sign) block.getState().getData();
+            return block.getRelative(signData.getAttachedFace());
+        }
+        return block.getRelative(BlockFace.DOWN);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -123,7 +161,15 @@ public final class SignManager implements Listener {
         }
         event.setCancelled(true);
         Player player = event.getPlayer();
-        game.randomJoin(player);
+        if (game.round() == null) {
+            game.selectMap(match.mapId());
+            game.giveLobbyWaitingItems(player);
+            game.openTeamMenu(player);
+        } else if (game.isMapSelected(match.mapId())) {
+            game.randomJoin(player);
+        } else {
+            plugin.messages().send(player, "round-already-running");
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

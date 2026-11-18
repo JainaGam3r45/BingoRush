@@ -160,6 +160,10 @@ public final class TeamMenu {
         messages.send(player, "team-joined", Game.teamPlaceholder(target));
         game.playSound(player, BingoConfig.SoundId.TEAM_CHIME);
         game.display().apply(player, target);
+        game.giveLobbyWaitingItems(player);
+        if (game.signManager() != null) {
+            game.signManager().updateAll();
+        }
         refreshAll();
     }
 
@@ -174,6 +178,10 @@ public final class TeamMenu {
         messages.send(player, "team-left");
         game.playSound(player, BingoConfig.SoundId.MENU_CLICK);
         game.display().apply(player, null);
+        game.removeLobbyWaitingItems(player);
+        if (game.signManager() != null) {
+            game.signManager().updateAll();
+        }
         refreshAll();
     }
 

@@ -2,6 +2,7 @@ package com.jifercraft.bingo.game;
 
 import com.jifercraft.bingo.BingoRush;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -66,6 +67,10 @@ public final class RoundListener implements Listener {
             }
             return;
         }
+        if (game.isLobbyItem(event.getCurrentItem()) || game.isLobbyItem(event.getCursor())) {
+            event.setCancelled(true);
+            return;
+        }
         // The card moves freely inside the player's inventory and nowhere else.
         if (event.getWhoClicked() instanceof Player && game.blocksCardClick((Player) event.getWhoClicked(), event)) {
             event.setCancelled(true);
@@ -81,6 +86,8 @@ public final class RoundListener implements Listener {
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
         if (MenuHolder.of(event.getInventory(), null) != null) {
+            event.setCancelled(true);
+        } else if (game.isLobbyItem(event.getOldCursor())) {
             event.setCancelled(true);
         } else if (game.blocksCardDrag(event) && event.getWhoClicked() instanceof Player) {
             event.setCancelled(true);
@@ -109,7 +116,7 @@ public final class RoundListener implements Listener {
     // is not kept; its owner gets another one.
     @EventHandler(ignoreCancelled = true)
     public void onCardSpawn(ItemSpawnEvent event) {
-        if (game.isCardItem(event.getEntity().getItemStack())) {
+        if (game.isCardItem(event.getEntity().getItemStack()) || game.isLobbyItem(event.getEntity().getItemStack())) {
             event.setCancelled(true);
         }
     }
@@ -118,7 +125,7 @@ public final class RoundListener implements Listener {
     public void onItemHeld(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
         ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
-        if (newItem != null && newItem.getType() == Material.COMPASS) {
+        if (newItem != null && newItem.getType() == Material.COMPASS && !game.isLobbyTeamsItem(newItem)) {
             game.pointCompass(player, false);
         }
     }
@@ -126,6 +133,10 @@ public final class RoundListener implements Listener {
     /** Nor dropped on the ground, where the round end would not find it. */
     @EventHandler
     public void onCardDrop(PlayerDropItemEvent event) {
+        if (game.isLobbyItem(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+            return;
+        }
         if (game.isCardItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
             game.cardLocked(event.getPlayer());
@@ -150,6 +161,22 @@ public final class RoundListener implements Listener {
             return;
         }
         ItemStack item = event.getItem();
+        if (game.isLobbyTeamsItem(item)) {
+            event.setCancelled(true);
+            game.openTeamMenu(event.getPlayer());
+            return;
+        }
+        if (game.isLobbyLeaveItem(item)) {
+            event.setCancelled(true);
+            Player player = event.getPlayer();
+            game.leaveTeam(player);
+            game.removeLobbyWaitingItems(player);
+            Location lobby = game.lobbyLocation();
+            if (lobby != null) {
+                player.teleport(lobby);
+            }
+            return;
+        }
         if (game.isCardItem(item)) {
             event.setCancelled(true);
             game.openCard(event.getPlayer());

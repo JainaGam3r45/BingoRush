@@ -337,3 +337,6 @@ season:
   gift-all-subtitle: "<ok>You have found all <total> gifts!</ok>"
   gift-proximity-actionbar: "<white>❄</white> <hl>Nearby Gift!</hl> <muted>(<distance>m)</muted> <white>❄</white>"
 
+lobby-item-teams: "<yellow><b>Select Team</b></yellow> <gray>(Right Click)</gray>"
+lobby-item-leave: "<red><b>Leave Game</b></red> <gray>(Right Click)</gray>"
+

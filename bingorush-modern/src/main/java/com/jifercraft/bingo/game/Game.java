@@ -103,12 +103,17 @@ public final class Game {
     private int secondsLeft;
     private boolean roundRestoredUnfinished;
     private SignManager signManager;
+    private final NamespacedKey lobbyTeamsTag;
+    private final NamespacedKey lobbyLeaveTag;
+    private String selectedMapId;
 
     public Game(BingoRush plugin, Teams teams) {
         this.plugin = plugin;
         this.teams = teams;
         this.cardTag = new NamespacedKey(plugin, "card-menu");
         this.cardItemTag = new NamespacedKey(plugin, "card-item");
+        this.lobbyTeamsTag = new NamespacedKey(plugin, "lobby-teams-item");
+        this.lobbyLeaveTag = new NamespacedKey(plugin, "lobby-leave-item");
         this.cardMenu = new CardMenu(plugin, teams, cardTag);
         this.teamMenu = new TeamMenu(plugin, this, new NamespacedKey(plugin, "team-menu"));
         this.setupMenu = new SetupMenu(plugin, this, new NamespacedKey(plugin, "setup-menu"));
@@ -119,6 +124,81 @@ public final class Game {
         this.cardAdvancements = new CardAdvancements(plugin);
         this.pendingRestores = new PendingRestores(new File(plugin.getDataFolder(), "data/pending-restores.json"),
                 plugin.getLogger());
+    }
+
+    public String selectedMapId() {
+        if (selectedMapId == null) {
+            BingoConfig cfg = plugin.bingoConfig();
+            if (cfg != null && !cfg.maps().isEmpty()) {
+                selectedMapId = cfg.maps().keySet().iterator().next();
+            }
+        }
+        return selectedMapId;
+    }
+
+    public boolean isMapSelected(String mapId) {
+        if (mapId == null) {
+            return false;
+        }
+        String current = selectedMapId();
+        return current != null && current.equalsIgnoreCase(mapId);
+    }
+
+    public void selectMap(String mapId) {
+        this.selectedMapId = mapId;
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+    }
+
+    public boolean isLobbyTeamsItem(ItemStack stack) {
+        return stack != null && stack.hasItemMeta()
+                && stack.getItemMeta().getPersistentDataContainer().has(lobbyTeamsTag, PersistentDataType.BYTE);
+    }
+
+    public boolean isLobbyLeaveItem(ItemStack stack) {
+        return stack != null && stack.hasItemMeta()
+                && stack.getItemMeta().getPersistentDataContainer().has(lobbyLeaveTag, PersistentDataType.BYTE);
+    }
+
+    public boolean isLobbyItem(ItemStack stack) {
+        return isLobbyTeamsItem(stack) || isLobbyLeaveItem(stack);
+    }
+
+    public void giveLobbyWaitingItems(Player player) {
+        removeLobbyWaitingItems(player);
+        ItemStack teamsItem = ItemType.COMPASS.createItemStack();
+        teamsItem.editMeta(meta -> {
+            meta.displayName(messages().render("lobby-item-teams"));
+            meta.getPersistentDataContainer().set(lobbyTeamsTag, PersistentDataType.BYTE, (byte) 1);
+        });
+        ItemStack leaveItem = ItemType.RED_BED.createItemStack();
+        leaveItem.editMeta(meta -> {
+            meta.displayName(messages().render("lobby-item-leave"));
+            meta.getPersistentDataContainer().set(lobbyLeaveTag, PersistentDataType.BYTE, (byte) 1);
+        });
+        player.getInventory().setItem(0, teamsItem);
+        player.getInventory().setItem(8, leaveItem);
+    }
+
+    public void removeLobbyWaitingItems(Player player) {
+        ItemStack[] contents = player.getInventory().getContents();
+        boolean changed = false;
+        for (int i = 0; i < contents.length; i++) {
+            if (isLobbyItem(contents[i])) {
+                contents[i] = null;
+                changed = true;
+            }
+        }
+        if (changed) {
+            player.getInventory().setContents(contents);
+        }
+    }
+
+    public void removeLobbyWaitingItemsFromAll() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            removeLobbyWaitingItems(player);
+        }
     }
 
     public SignManager signManager() {
@@ -554,6 +634,8 @@ public final class Game {
         display.apply(player, target);
         if (current != null) {
             prepareTeamEntry(player, target, current);
+        } else {
+            giveLobbyWaitingItems(player);
         }
     }
 
@@ -673,6 +755,7 @@ public final class Game {
         }
         teamMenu.refreshAll();
         display.apply(player, null);
+        removeLobbyWaitingItems(player);
         if (round != null) {
             hud.playerLeft(player);
             removeCardItems(player);
@@ -820,6 +903,8 @@ public final class Game {
         }
         if (current != null) {
             prepareTeamEntry(target, team, current);
+        } else {
+            giveLobbyWaitingItems(target);
         }
     }
 
@@ -1237,6 +1322,7 @@ public final class Game {
         if (round == null) {
             return;
         }
+        removeLobbyWaitingItemsFromAll();
         round.beginRun();
         if (roundConfig.clearInventories()) {
             saveAndClearInventories();
@@ -1314,6 +1400,7 @@ public final class Game {
     /** The round is over: everything back to the lobby. */
     private void endRound() {
         cancelTasks();
+        removeLobbyWaitingItemsFromAll();
         cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();

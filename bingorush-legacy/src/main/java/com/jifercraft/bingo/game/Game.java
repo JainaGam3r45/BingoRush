@@ -119,6 +119,78 @@ public final class Game {
                 plugin.getLogger(), advancements);
     }
 
+    private String selectedMapId = "partida-1";
+
+    public String selectedMapId() {
+        return selectedMapId;
+    }
+
+    public boolean isMapSelected(String mapId) {
+        if (mapId == null) {
+            return false;
+        }
+        return selectedMapId.equalsIgnoreCase(mapId);
+    }
+
+    public void selectMap(String mapId) {
+        if (mapId != null && !mapId.equalsIgnoreCase(this.selectedMapId)) {
+            this.selectedMapId = mapId;
+            if (signManager != null) {
+                signManager.updateAll();
+            }
+        }
+    }
+
+    public boolean isLobbyTeamsItem(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta() || !stack.getItemMeta().hasDisplayName()) {
+            return false;
+        }
+        return stack.getItemMeta().getDisplayName().endsWith(LegacyItems.LOBBY_TEAMS_MARKER);
+    }
+
+    public boolean isLobbyLeaveItem(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta() || !stack.getItemMeta().hasDisplayName()) {
+            return false;
+        }
+        return stack.getItemMeta().getDisplayName().endsWith(LegacyItems.LOBBY_LEAVE_MARKER);
+    }
+
+    public boolean isLobbyItem(ItemStack stack) {
+        return isLobbyTeamsItem(stack) || isLobbyLeaveItem(stack);
+    }
+
+    public void giveLobbyWaitingItems(Player player) {
+        removeLobbyWaitingItems(player);
+        ItemStack teamsItem = LegacyItems.item(XMaterial.COMPASS,
+                messages().legacy(messages().render("lobby-item-teams")) + LegacyItems.LOBBY_TEAMS_MARKER,
+                null, false);
+        ItemStack leaveItem = LegacyItems.item(XMaterial.RED_BED,
+                messages().legacy(messages().render("lobby-item-leave")) + LegacyItems.LOBBY_LEAVE_MARKER,
+                null, false);
+        player.getInventory().setItem(0, teamsItem);
+        player.getInventory().setItem(8, leaveItem);
+    }
+
+    public void removeLobbyWaitingItems(Player player) {
+        ItemStack[] contents = player.getInventory().getContents();
+        boolean changed = false;
+        for (int i = 0; i < contents.length; i++) {
+            if (isLobbyItem(contents[i])) {
+                contents[i] = null;
+                changed = true;
+            }
+        }
+        if (changed) {
+            player.getInventory().setContents(contents);
+        }
+    }
+
+    public void removeLobbyWaitingItemsFromAll() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            removeLobbyWaitingItems(player);
+        }
+    }
+
     public SignManager signManager() {
         return signManager;
     }
@@ -554,6 +626,8 @@ public final class Game {
         display.apply(player, target);
         if (current != null) {
             prepareTeamEntry(player, target, current);
+        } else {
+            giveLobbyWaitingItems(player);
         }
     }
 
@@ -673,6 +747,7 @@ public final class Game {
         }
         teamMenu.refreshAll();
         display.apply(player, null);
+        removeLobbyWaitingItems(player);
         if (round != null) {
             hud.playerLeft(player);
             removeCardItems(player);
@@ -818,6 +893,8 @@ public final class Game {
         }
         if (current != null) {
             prepareTeamEntry(target, team, current);
+        } else {
+            giveLobbyWaitingItems(target);
         }
     }
 
@@ -1288,6 +1365,7 @@ public final class Game {
         if (round == null) {
             return;
         }
+        removeLobbyWaitingItemsFromAll();
         round.beginRun();
         if (roundConfig.clearInventories()) {
             saveAndClearInventories();
@@ -1368,6 +1446,7 @@ public final class Game {
     /** The round is over: everything back to the lobby. */
     private void endRound() {
         cancelTasks();
+        removeLobbyWaitingItemsFromAll();
         cardMenu.closeAll();
         hud.hideAll();
         restoreInventories();

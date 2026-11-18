@@ -12,9 +12,15 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.HangingSign;
+import org.bukkit.block.data.type.WallHangingSign;
+import org.bukkit.block.data.type.WallSign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -67,8 +73,9 @@ public final class SignManager implements Listener {
         side.line(0, plugin.messages().render("brand"));
         side.line(1, Component.text(mapName, NamedTextColor.WHITE));
         Round round = game.round();
+        boolean isCurrentMap = game.isMapSelected(mapId);
         String statusKey = "sign-status-waiting";
-        if (round != null) {
+        if (round != null && isCurrentMap) {
             if (round.state() == Round.State.COUNTDOWN) {
                 statusKey = "sign-status-starting";
             } else if (round.state() == Round.State.PAUSED) {
@@ -78,10 +85,48 @@ public final class SignManager implements Listener {
             }
         }
         side.line(2, plugin.messages().render(statusKey));
-        int current = game.teams().totalMembers();
+        int current = isCurrentMap ? game.teams().totalMembers() : 0;
         int max = game.teams().all().size() * game.teamSizeCap();
         side.line(3, Component.text(current + "/" + max, NamedTextColor.GRAY));
         sign.update(true, false);
+        updateAttachedBlock(sign, round, isCurrentMap);
+    }
+
+    private void updateAttachedBlock(Sign sign, Round round, boolean isCurrentMap) {
+        Block attached = getAttachedBlock(sign.getBlock());
+        if (attached == null) {
+            return;
+        }
+        Material concrete;
+        if (round != null && isCurrentMap) {
+            if (round.state() == Round.State.COUNTDOWN) {
+                concrete = Material.YELLOW_CONCRETE;
+            } else if (round.state() == Round.State.PAUSED) {
+                concrete = Material.ORANGE_CONCRETE;
+            } else {
+                concrete = Material.RED_CONCRETE;
+            }
+        } else {
+            concrete = Material.LIME_CONCRETE;
+        }
+        if (attached.getType() != concrete && !attached.isEmpty() && !attached.isLiquid()
+                && attached.getType() != Material.BEDROCK && attached.getType() != Material.BARRIER) {
+            attached.setType(concrete);
+        }
+    }
+
+    private Block getAttachedBlock(Block block) {
+        BlockData data = block.getBlockData();
+        if (data instanceof WallSign wallSign) {
+            return block.getRelative(wallSign.getFacing().getOppositeFace());
+        }
+        if (data instanceof WallHangingSign wallHanging) {
+            return block.getRelative(wallHanging.getFacing().getOppositeFace());
+        }
+        if (data instanceof HangingSign) {
+            return block.getRelative(BlockFace.UP);
+        }
+        return block.getRelative(BlockFace.DOWN);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -121,7 +166,15 @@ public final class SignManager implements Listener {
         }
         event.setCancelled(true);
         Player player = event.getPlayer();
-        game.randomJoin(player);
+        if (game.round() == null) {
+            game.selectMap(match.mapId());
+            game.giveLobbyWaitingItems(player);
+            game.openTeamMenu(player);
+        } else if (game.isMapSelected(match.mapId())) {
+            game.randomJoin(player);
+        } else {
+            plugin.messages().send(player, "round-already-running");
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

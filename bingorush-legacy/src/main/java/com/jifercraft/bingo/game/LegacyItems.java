@@ -19,6 +19,8 @@ final class LegacyItems {
      * items, and a run of color codes with nothing between them is invisible.
      */
     static final String CARD_MARKER = "§b§1§n§9§0§r";
+    static final String LOBBY_TEAMS_MARKER = "§b§1§n§9§1§r";
+    static final String LOBBY_LEAVE_MARKER = "§b§1§n§9§2§r";
 
     // Dye colors with their RGB, to pick the pane or wool closest to a team color.
     private static final String[] DYES = {

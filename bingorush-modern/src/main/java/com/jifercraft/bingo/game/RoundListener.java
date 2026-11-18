@@ -72,6 +72,10 @@ public final class RoundListener implements Listener {
             }
             return;
         }
+        if (game.isLobbyItem(event.getCurrentItem()) || game.isLobbyItem(event.getCursor())) {
+            event.setCancelled(true);
+            return;
+        }
         if (event.getWhoClicked() instanceof Player player) {
             game.checkClaims(player);
         }
@@ -82,6 +86,8 @@ public final class RoundListener implements Listener {
         if (game.isCardMenuView(event.getView())
                 || game.isTeamMenuView(event.getView())
                 || game.isSetupMenuView(event.getView())) {
+            event.setCancelled(true);
+        } else if (game.isLobbyItem(event.getOldCursor())) {
             event.setCancelled(true);
         } else if (game.blocksCardDrag(event) && event.getWhoClicked() instanceof Player player) {
             event.setCancelled(true);
@@ -106,6 +112,26 @@ public final class RoundListener implements Listener {
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
+        if (game.isLobbyTeamsItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
+                game.openTeamMenu(event.getPlayer());
+            }
+            return;
+        }
+        if (game.isLobbyLeaveItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getHand() == EquipmentSlot.HAND || event.getHand() == EquipmentSlot.OFF_HAND) {
+                Player player = event.getPlayer();
+                game.leaveTeam(player);
+                game.removeLobbyWaitingItems(player);
+                org.bukkit.Location lobby = game.lobbyLocation();
+                if (lobby != null) {
+                    player.teleport(lobby);
+                }
+            }
+            return;
+        }
         if (!game.isCardItem(event.getItem())) {
             return;
         }
@@ -120,6 +146,9 @@ public final class RoundListener implements Listener {
     public void onCompassInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        if (game.isLobbyTeamsItem(event.getItem())) {
             return;
         }
         if (event.getItem() == null || event.getItem().getType() != Material.COMPASS) {
@@ -173,7 +202,7 @@ public final class RoundListener implements Listener {
     // is not kept; its owner gets another one.
     @EventHandler(ignoreCancelled = true)
     public void onCardSpawn(ItemSpawnEvent event) {
-        if (game.isCardItem(event.getEntity().getItemStack())) {
+        if (game.isCardItem(event.getEntity().getItemStack()) || game.isLobbyItem(event.getEntity().getItemStack())) {
             event.setCancelled(true);
         }
     }
@@ -181,6 +210,10 @@ public final class RoundListener implements Listener {
     /** Nor dropped on the ground, where the round end would not find it. */
     @EventHandler
     public void onCardDrop(PlayerDropItemEvent event) {
+        if (game.isLobbyItem(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+            return;
+        }
         if (game.isCardItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
             game.cardLocked(event.getPlayer());
