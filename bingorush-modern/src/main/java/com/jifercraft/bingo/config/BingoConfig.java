@@ -4,6 +4,8 @@ import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.card.ItemTier;
 import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.game.BingoGameMode;
+import com.jifercraft.bingo.season.SeasonSettings;
+import com.jifercraft.bingo.season.SeasonWindow;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import java.util.ArrayList;
@@ -84,6 +86,7 @@ public final class BingoConfig {
     private final float lobbyYaw;
     private final float lobbyPitch;
     private final Map<String, GameMapDefinition> maps;
+    private final SeasonSettings seasonSettings;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives,
             ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, boolean tabEnabled, boolean chatEnabled,
@@ -95,7 +98,7 @@ public final class BingoConfig {
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin,
             int updateCheckIntervalHours, boolean historyEnabled, int historyMaxSavedMatches,
             String lobbyWorld, double lobbyX, double lobbyY, double lobbyZ, float lobbyYaw, float lobbyPitch,
-            Map<String, GameMapDefinition> maps) {
+            Map<String, GameMapDefinition> maps, SeasonSettings seasonSettings) {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
@@ -130,6 +133,7 @@ public final class BingoConfig {
         this.lobbyYaw = lobbyYaw;
         this.lobbyPitch = lobbyPitch;
         this.maps = maps;
+        this.seasonSettings = seasonSettings;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -385,6 +389,27 @@ public final class BingoConfig {
             }
         }
 
+        SeasonSettings seasonSettings;
+        boolean seasonEnabled = yaml.getBoolean("season.enabled", false);
+        String preStart = yaml.getString("season.pre-season-start", "2026-11-25T00:00:00Z");
+        String actStart = yaml.getString("season.active-start", "2026-12-01T00:00:00Z");
+        String actEnd = yaml.getString("season.active-end", "2026-12-31T23:59:59Z");
+        String wrapEnd = yaml.getString("season.wrap-up-end", "2027-01-03T23:59:59Z");
+        boolean snowfall = yaml.getBoolean("season.snowfall", true);
+        boolean claimFirework = yaml.getBoolean("season.claim-firework", true);
+        boolean lobbySnow = yaml.getBoolean("season.lobby-snow", false);
+        int lobbyRadius = yaml.getInt("season.lobby-radius", 25);
+        if (lobbyRadius < 0) {
+            problems.add("season.lobby-radius is " + lobbyRadius + ", use 0 or greater");
+        }
+        try {
+            SeasonWindow window = SeasonWindow.parse(preStart, actStart, actEnd, wrapEnd);
+            seasonSettings = new SeasonSettings(seasonEnabled, window, snowfall, claimFirework, lobbySnow, lobbyRadius);
+        } catch (IllegalArgumentException e) {
+            problems.add("season configuration error: " + e.getMessage());
+            seasonSettings = new SeasonSettings(false, new SeasonWindow(0, 0, 0, 0), false, false, false, 0);
+        }
+
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
@@ -392,7 +417,11 @@ public final class BingoConfig {
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, advancements, sounds,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
                 historyEnabled, historyMaxSavedMatches,
-                lobbyWorld, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch, maps);
+                lobbyWorld, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch, maps, seasonSettings);
+    }
+
+    public SeasonSettings seasonSettings() {
+        return seasonSettings;
     }
 
     public Location lobbyLocation() {

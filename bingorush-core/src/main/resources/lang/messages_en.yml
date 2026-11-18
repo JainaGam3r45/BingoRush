@@ -44,6 +44,7 @@ help:
   lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teleport to the waiting lobby"
   randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Join an available game"
   setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Set the waiting lobby location"
+  season: "<white>/bingo season</white> <muted>|</muted> <body>Season status, phases and testing"
 
 no-permission: "<prefix><err>You don't have permission to do that."
 players-only: "<prefix><err>This command only works in game."
@@ -309,3 +310,17 @@ history:
   not-found: "<prefix><err>No match found with id <errval><id></errval><err>."
   invalid-page: "<prefix><err>The page has to be a number between 1 and <total>."
   cleared: "<prefix><body>Match history cleared."
+
+# Seasonal events.
+season:
+  disabled: "<prefix><err>Season events are turned off in config.yml."
+  status: "<prefix><body>Season: <hl><phase></hl> <muted>(<remaining> remaining)</muted>"
+  status-inactive: "<prefix><body>Season: <muted>Inactive</muted>"
+  pre-season-chat: "<prefix><body>A new season begins on <hl><date></hl>!"
+  active-chat: "<prefix><body>The special season is now active! Enjoy festive games."
+  wrap-up-chat: "<prefix><body>The special season has entered its final wrap-up phase."
+  ended-chat: "<prefix><body>The special season has ended. Lobby decor restored."
+  simulated: "<prefix><body>Simulated season phase set to <hl><phase></hl>."
+  restored: "<prefix><body>Restored <hl><count></hl> <body>blocks from the season journal."
+  no-blocks: "<prefix><muted>No recorded season blocks to restore.</muted>"
+

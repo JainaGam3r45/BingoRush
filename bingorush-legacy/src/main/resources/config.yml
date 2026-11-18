@@ -268,3 +268,21 @@ history:
   # Maximum number of match files to keep in data/matches/.
   # The oldest matches are deleted when new ones finish. 0 disables the limit.
   max-saved-matches: 50
+
+# Seasonal event settings.
+# Automated schedule runs in UTC. When enabled, visual and festive effects
+# trigger according to the current season phase.
+season:
+  enabled: true
+  # Scheduled dates in UTC (ISO-8601).
+  pre-season-start: "2026-11-25T00:00:00Z"
+  active-start: "2026-12-01T00:00:00Z"
+  active-end: "2026-12-31T23:59:59Z"
+  wrap-up-end: "2027-01-03T23:59:59Z"
+  # Visual effects during active season.
+  snowfall: true
+  claim-firework: true
+  lobby-snow: false
+  # Radius in blocks around lobby spawn for seasonal visual changes (0 disables).
+  lobby-radius: 25
+

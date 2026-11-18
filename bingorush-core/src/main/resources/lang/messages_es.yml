@@ -40,6 +40,7 @@ help:
   lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teletranspórtate al lobby de espera"
   randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Únete a una partida disponible"
   setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Establece el punto de espera del lobby"
+  season: "<white>/bingo season</white> <muted>|</muted> <body>Estado de temporada, fases y pruebas"
 
 no-permission: "<prefix><err>No tienes permiso para eso."
 players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
@@ -305,3 +306,17 @@ history:
   not-found: "<prefix><err>No se encontró ninguna partida con el identificador <errval><id></errval><err>."
   invalid-page: "<prefix><err>La página debe ser un número entre 1 y <total>."
   cleared: "<prefix><body>Se ha borrado el historial de partidas."
+
+# Seasonal events.
+season:
+  disabled: "<prefix><err>Los eventos de temporada están desactivados en config.yml."
+  status: "<prefix><body>Temporada: <hl><phase></hl> <muted>(<remaining> restante)</muted>"
+  status-inactive: "<prefix><body>Temporada: <muted>Inactiva</muted>"
+  pre-season-chat: "<prefix><body>¡Una nueva temporada comienza el <hl><date></hl>!"
+  active-chat: "<prefix><body>¡La temporada especial ya está activa! Disfruta de partidas festivas."
+  wrap-up-chat: "<prefix><body>La temporada especial ha entrado en su fase final de cierre."
+  ended-chat: "<prefix><body>La temporada especial ha terminado. Decoración del lobby restaurada."
+  simulated: "<prefix><body>Fase de temporada simulada establecida a <hl><phase></hl>."
+  restored: "<prefix><body>Se restauraron <hl><count></hl> <body>bloques del registro de temporada."
+  no-blocks: "<prefix><muted>No hay bloques registrados de temporada para restaurar.</muted>"
+
