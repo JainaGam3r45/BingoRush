@@ -40,6 +40,7 @@ help:
   lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teletranspórtate al lobby de espera"
   randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Únete a una partida disponible"
   setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Establece el punto de espera del lobby"
+  setwaiting: "<white>/bingo setwaiting <hl><arena></hl></white> <muted>|</muted> <body>Establece el lobby de espera de una arena"
   season: "<white>/bingo season</white> <muted>|</muted> <body>Estado de temporada, fases y pruebas"
 
 no-permission: "<prefix><err>No tienes permiso para eso."
@@ -49,6 +50,9 @@ players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
 lobby-set: "<prefix><ok>Punto de lobby establecido en <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
 lobby-teleported: "<prefix><body>Teletransportado al lobby."
 lobby-not-set: "<prefix><err>Aún no se ha establecido un lobby. Un administrador puede configurarlo con <hl>/bingo setlobby</hl>."
+waiting-lobby-set: "<prefix><ok>Punto de espera de la arena <hl><map></hl> establecido en <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
+map-not-found: "<prefix><err>No se encontró la arena o mapa <errval><name></errval><err>."
+command-usage-setwaiting: "<prefix><err>Uso: <hl>/bingo setwaiting <arena></hl>"
 
 # Signs and game joining.
 sign-created: "<prefix><ok>Cartel de Bingo creado para el mapa <hl><map></hl>.</ok>"

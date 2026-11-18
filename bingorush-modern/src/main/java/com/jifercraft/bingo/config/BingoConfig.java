@@ -387,7 +387,20 @@ public final class BingoConfig {
                     String modeStr = mapSec.getString("mode", "items");
                     BingoGameMode mapMode = "advancements".equalsIgnoreCase(modeStr) ? BingoGameMode.ADVANCEMENTS : BingoGameMode.ITEMS;
                     long limit = mapSec.getLong("time-limit", timeLimit);
-                    maps.put(key.toLowerCase(Locale.ROOT), new GameMapDefinition(key, name, seed, mapMode, limit));
+                    Location waitingLobby = null;
+                    String wWorld = mapSec.getString("waiting-lobby.world", null);
+                    if (wWorld != null && !wWorld.isEmpty()) {
+                        World worldObj = Bukkit.getWorld(wWorld);
+                        if (worldObj != null) {
+                            double wx = mapSec.getDouble("waiting-lobby.x", 0.0);
+                            double wy = mapSec.getDouble("waiting-lobby.y", 0.0);
+                            double wz = mapSec.getDouble("waiting-lobby.z", 0.0);
+                            float wYaw = (float) mapSec.getDouble("waiting-lobby.yaw", 0.0);
+                            float wPitch = (float) mapSec.getDouble("waiting-lobby.pitch", 0.0);
+                            waitingLobby = new Location(worldObj, wx, wy, wz, wYaw, wPitch);
+                        }
+                    }
+                    maps.put(key.toLowerCase(Locale.ROOT), new GameMapDefinition(key, name, seed, mapMode, limit, waitingLobby));
                 }
             }
         }

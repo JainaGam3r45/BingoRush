@@ -12,6 +12,7 @@ import java.util.Locale;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -23,6 +24,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 
@@ -164,6 +166,10 @@ public final class SignManager implements Listener {
         if (game.round() == null) {
             game.selectMap(match.mapId());
             game.giveLobbyWaitingItems(player);
+            Location waitingLobby = game.waitingLobbyLocation(match.mapId());
+            if (waitingLobby != null) {
+                player.teleport(waitingLobby);
+            }
             game.openTeamMenu(player);
         } else if (game.isMapSelected(match.mapId())) {
             game.randomJoin(player);
@@ -175,22 +181,72 @@ public final class SignManager implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (!(block.getState() instanceof Sign)) {
-            return;
-        }
-        SignStorage.SavedSign match = findSign(block);
-        if (match == null) {
-            return;
-        }
         Player player = event.getPlayer();
-        if (!player.hasPermission("bingo.admin")) {
-            event.setCancelled(true);
-            plugin.messages().send(player, "sign-cannot-break");
-            return;
+
+        // 1. Direct sign break
+        SignStorage.SavedSign directMatch = findSign(block);
+        if (directMatch != null) {
+            if (!player.hasPermission("bingo.admin")) {
+                event.setCancelled(true);
+                plugin.messages().send(player, "sign-cannot-break");
+                return;
+            }
+            signs.remove(directMatch);
+            save();
+            plugin.messages().send(player, "sign-removed");
         }
-        signs.remove(match);
-        save();
-        plugin.messages().send(player, "sign-removed");
+
+        // 2. Break of the support block holding an attached sign
+        List<SignStorage.SavedSign> attachedSigns = findSignsAttachedTo(block);
+        if (!attachedSigns.isEmpty()) {
+            if (!player.hasPermission("bingo.admin")) {
+                event.setCancelled(true);
+                plugin.messages().send(player, "sign-cannot-break");
+                return;
+            }
+            for (SignStorage.SavedSign s : attachedSigns) {
+                signs.remove(s);
+            }
+            save();
+            plugin.messages().send(player, "sign-removed");
+        }
+    }
+
+    private List<SignStorage.SavedSign> findSignsAttachedTo(Block block) {
+        List<SignStorage.SavedSign> attached = new ArrayList<>();
+        BlockFace[] faces = new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN};
+        for (BlockFace face : faces) {
+            Block neighbor = block.getRelative(face);
+            SignStorage.SavedSign saved = findSign(neighbor);
+            if (saved != null) {
+                Block targetAttached = getAttachedBlock(neighbor);
+                if (targetAttached != null && targetAttached.getX() == block.getX()
+                        && targetAttached.getY() == block.getY()
+                        && targetAttached.getZ() == block.getZ()
+                        && targetAttached.getWorld().getName().equals(block.getWorld().getName())) {
+                    attached.add(saved);
+                }
+            }
+        }
+        return attached;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockPhysics(BlockPhysicsEvent event) {
+        final Block block = event.getBlock();
+        final SignStorage.SavedSign match = findSign(block);
+        if (match != null) {
+            Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                @Override
+                public void run() {
+                    if (!(block.getState() instanceof Sign)) {
+                        if (signs.remove(match)) {
+                            save();
+                        }
+                    }
+                }
+            });
+        }
     }
 
     private SignStorage.SavedSign findSign(Block block) {

@@ -44,6 +44,7 @@ help:
   lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teleport to the waiting lobby"
   randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Join an available game"
   setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Set the waiting lobby location"
+  setwaiting: "<white>/bingo setwaiting <hl><arena></hl></white> <muted>|</muted> <body>Set the waiting lobby location for an arena"
   season: "<white>/bingo season</white> <muted>|</muted> <body>Season status, phases and testing"
 
 no-permission: "<prefix><err>You don't have permission to do that."
@@ -53,6 +54,9 @@ players-only: "<prefix><err>This command only works in game."
 lobby-set: "<prefix><ok>Lobby location set to <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
 lobby-teleported: "<prefix><body>Teleported to the lobby."
 lobby-not-set: "<prefix><err>No lobby has been set yet. An admin can set one with <hl>/bingo setlobby</hl>."
+waiting-lobby-set: "<prefix><ok>Waiting lobby for arena <hl><map></hl> set to <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
+map-not-found: "<prefix><err>Arena or map <errval><name></errval><err> was not found."
+command-usage-setwaiting: "<prefix><err>Usage: <hl>/bingo setwaiting <arena></hl>"
 
 # Signs and game joining.
 sign-created: "<prefix><ok>Bingo sign created for map <hl><map></hl>.</ok>"

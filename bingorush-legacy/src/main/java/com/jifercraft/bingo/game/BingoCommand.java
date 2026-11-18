@@ -30,11 +30,11 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
     private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = Arrays.asList(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "setlobby", "history", "export", "reload", "season");
+            "setlobby", "setwaiting", "history", "export", "reload", "season");
     private static final List<String> PLAYER_SUBCOMMANDS = Arrays.asList(
             "help", "version", "join", "leave", "spectate", "coords", "c", "card", "teams", "lobby", "randomjoin", "autojoin");
     private static final List<String> ADMIN_SUBCOMMANDS = Arrays.asList(
-            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "setlobby", "history", "export", "season");
+            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "setlobby", "setwaiting", "setwaitinglobby", "history", "export", "season");
 
     private final BingoRush plugin;
     private final Game game;
@@ -88,6 +88,14 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                 break;
             case "setlobby":
                 asPlayer(sender, "bingo.admin", game::setLobby);
+                break;
+            case "setwaiting":
+            case "setwaitinglobby":
+                if (args.length > 1) {
+                    asPlayer(sender, "bingo.admin", player -> game.setWaitingLobby(player, args[1]));
+                } else {
+                    plugin.messages().send(sender, "command-usage-setwaiting");
+                }
                 break;
             case "lobby":
                 asPlayer(sender, "bingo.play", game::teleportToLobby);
@@ -427,6 +435,11 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                     return matching(ids, args[1]);
                 case "season":
                     return admin ? matching(Arrays.asList("status", "phase", "reset", "restore", "gift", "test"), args[1])
+                            : Collections.<String>emptyList();
+                case "setwaiting":
+                case "setwaitinglobby":
+                    return admin && plugin.bingoConfig() != null
+                            ? matching(new ArrayList<>(plugin.bingoConfig().maps().keySet()), args[1])
                             : Collections.<String>emptyList();
                 default:
                     return Collections.emptyList();

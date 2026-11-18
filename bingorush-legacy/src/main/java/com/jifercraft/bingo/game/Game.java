@@ -17,6 +17,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.ChatStyle;
+import com.jifercraft.bingo.config.GameMapDefinition;
 import com.jifercraft.bingo.config.LateJoin;
 import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.history.MatchHistory;
@@ -257,6 +258,43 @@ public final class Game {
     public Location lobbyLocation() {
         BingoConfig cfg = plugin.bingoConfig();
         return (cfg != null && cfg.hasConfiguredLobby()) ? cfg.lobbyLocation() : null;
+    }
+
+    public void setWaitingLobby(Player player, String mapId) {
+        if (mapId == null || mapId.trim().isEmpty()) {
+            messages().send(player, "command-usage-setwaiting");
+            return;
+        }
+        GameMapDefinition map = plugin.bingoConfig() != null ? plugin.bingoConfig().getMap(mapId) : null;
+        if (map == null) {
+            messages().send(player, "map-not-found", Placeholder.unparsed("name", mapId));
+            return;
+        }
+        Location loc = player.getLocation();
+        FileConfiguration cfg = plugin.getConfig();
+        String path = "maps." + map.id() + ".waiting-lobby";
+        cfg.set(path + ".world", loc.getWorld().getName());
+        cfg.set(path + ".x", loc.getX());
+        cfg.set(path + ".y", loc.getY());
+        cfg.set(path + ".z", loc.getZ());
+        cfg.set(path + ".yaw", (double) loc.getYaw());
+        cfg.set(path + ".pitch", (double) loc.getPitch());
+        plugin.saveConfig();
+        plugin.reloadSettings();
+        messages().send(player, "waiting-lobby-set",
+                Placeholder.unparsed("map", map.name()),
+                Placeholder.unparsed("world", loc.getWorld().getName()),
+                Placeholder.unparsed("x", String.format(Locale.ROOT, "%.1f", loc.getX())),
+                Placeholder.unparsed("y", String.format(Locale.ROOT, "%.1f", loc.getY())),
+                Placeholder.unparsed("z", String.format(Locale.ROOT, "%.1f", loc.getZ())));
+    }
+
+    public Location waitingLobbyLocation(String mapId) {
+        if (mapId == null || plugin.bingoConfig() == null) {
+            return null;
+        }
+        GameMapDefinition map = plugin.bingoConfig().getMap(mapId);
+        return map != null ? map.waitingLobby() : null;
     }
 
     /**

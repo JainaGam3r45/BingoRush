@@ -34,7 +34,7 @@ public final class BingoCommand {
     private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = List.of(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "setlobby", "history", "export", "reload", "season");
+            "setlobby", "setwaiting", "history", "export", "reload", "season");
 
     private final BingoRush plugin;
     private final Game game;
@@ -56,6 +56,22 @@ public final class BingoCommand {
                 .then(Commands.literal("setlobby")
                         .requires(this::isAdmin)
                         .executes(ctx -> runForPlayer(ctx, game::setLobby)))
+                .then(Commands.literal("setwaiting")
+                        .requires(this::isAdmin)
+                        .then(Commands.argument("map", StringArgumentType.string())
+                                .suggests(this::suggestMaps)
+                                .executes(ctx -> runForPlayer(ctx, player ->
+                                        game.setWaitingLobby(player, StringArgumentType.getString(ctx, "map")))))
+                        .executes(ctx -> runForPlayer(ctx, player ->
+                                plugin.messages().send(player, "command-usage-setwaiting"))))
+                .then(Commands.literal("setwaitinglobby")
+                        .requires(this::isAdmin)
+                        .then(Commands.argument("map", StringArgumentType.string())
+                                .suggests(this::suggestMaps)
+                                .executes(ctx -> runForPlayer(ctx, player ->
+                                        game.setWaitingLobby(player, StringArgumentType.getString(ctx, "map")))))
+                        .executes(ctx -> runForPlayer(ctx, player ->
+                                plugin.messages().send(player, "command-usage-setwaiting"))))
                 .then(Commands.literal("randomjoin")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, game::randomJoin)))
@@ -542,6 +558,18 @@ public final class BingoCommand {
         for (SeasonPhase p : SeasonPhase.values()) {
             if (p.name().toLowerCase(Locale.ROOT).startsWith(rem)) {
                 builder.suggest(p.name().toLowerCase(Locale.ROOT));
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestMaps(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        String rem = builder.getRemainingLowerCase();
+        if (plugin.bingoConfig() != null) {
+            for (String mapId : plugin.bingoConfig().maps().keySet()) {
+                if (mapId.toLowerCase(Locale.ROOT).startsWith(rem)) {
+                    builder.suggest(mapId);
+                }
             }
         }
         return builder.buildFuture();
