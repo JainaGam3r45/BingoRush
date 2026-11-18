@@ -94,6 +94,7 @@ public final class Hud {
         sidebar = scoreboard.registerNewObjective("bingo", "dummy");
         sidebar.setDisplayName(plugin.objectiveTitle(messages().render("sidebar-title")));
         sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
+        game.display().registerOnScoreboard(scoreboard, game.teams().all());
         for (Player player : participants()) {
             previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
             player.setScoreboard(scoreboard);

@@ -181,12 +181,6 @@ public final class Messages {
         Bukkit.getConsoleSender().sendMessage(miniMessage.deserialize("<prefix><body>" + template, resolver));
     }
 
-    /** True when the template of a key contains some text, to check what an admin wrote. */
-    public boolean templateHas(String key, String text) {
-        String raw = yaml.getString(key);
-        return raw != null && raw.contains(text);
-    }
-
     /**
      * A message rendered and flattened to plain text, for the places a plain
      * string is needed, such as a team name the plugin invents.

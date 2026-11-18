@@ -175,12 +175,6 @@ public final class RoundListener implements Listener {
         });
     }
 
-    // After the chat plugins that set their own format, so the team format of a
-    // round wins while it runs and the player's other plugins keep working outside it.
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onChat(AsyncPlayerChatEvent event) {
-        game.styleChat(event);
-    }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {

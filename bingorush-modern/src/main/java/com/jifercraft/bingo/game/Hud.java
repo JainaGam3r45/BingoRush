@@ -71,6 +71,7 @@ public final class Hud {
                 plugin.messages().render("sidebar-title"));
         sidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
         sidebar.numberFormat(NumberFormat.blank());
+        game.display().registerOnScoreboard(scoreboard, game.teams().all());
         for (Player player : participants()) {
             previousScoreboards.put(player.getUniqueId(), player.getScoreboard());
             player.setScoreboard(scoreboard);

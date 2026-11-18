@@ -1,41 +1,24 @@
 package com.jifercraft.bingo.game;
 
 import com.jifercraft.bingo.BingoRush;
-import com.jifercraft.bingo.config.BingoConfig;
-import com.jifercraft.bingo.config.Messages;
-import io.papermc.paper.chat.ChatRenderer;
-import io.papermc.paper.event.player.AsyncChatEvent;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.tag.Tag;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.scoreboard.Scoreboard;
 
 /**
- * Team colors in the player list and a team format in chat, for players on a
- * team. Both are optional, because another plugin may own the tab or the chat.
+ * Team colors in the player list and nametags managed through scoreboard teams,
+ * leaving player list names, headers and chat formatting untouched.
  */
 public final class TeamDisplay {
 
-    // What was written for one player, and what was there before it.
-    private record Applied(Component previousName, int order, int previousOrder, boolean framed) {
-    }
-
+    private static final String PREFIX = "br_";
     private final BingoRush plugin;
-    private final Map<UUID, Applied> tabs = new HashMap<>();
-    // Chat events arrive on another thread, where Teams is not safe to read.
-    // This map is filled on the main thread and is all the chat handler uses.
-    private final Map<UUID, Team> chatTeams = new ConcurrentHashMap<>();
-    private volatile boolean warnedAboutChatFormat;
 
     TeamDisplay(BingoRush plugin) {
         this.plugin = plugin;
@@ -55,127 +38,124 @@ public final class TeamDisplay {
     }
 
     public void apply(Player player, Team team) {
-        BingoConfig config = plugin.bingoConfig();
-        if (config == null) {
+        if (player == null) {
             return;
         }
-        if (config.chatEnabled()) {
-            if (team != null) {
-                chatTeams.put(player.getUniqueId(), team);
-            } else {
-                chatTeams.remove(player.getUniqueId());
+        updatePlayerScoreboard(player.getScoreboard(), player, team);
+        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
+        if (mainBoard != player.getScoreboard()) {
+            updatePlayerScoreboard(mainBoard, player, team);
+        }
+    }
+
+    /**
+     * Registers all active bingo teams on the given scoreboard and adds their members.
+     * Called by Hud when constructing the round scoreboard so players see team colors.
+     */
+    public void registerOnScoreboard(Scoreboard board, Collection<Team> teams) {
+        if (board == null || teams == null) {
+            return;
+        }
+        for (Team team : teams) {
+            String teamKey = teamKey(team);
+            org.bukkit.scoreboard.Team sbTeam = board.getTeam(teamKey);
+            if (sbTeam == null) {
+                sbTeam = board.registerNewTeam(teamKey);
+            }
+            NamedTextColor color = NamedTextColor.nearestTo(team.color());
+            if (color != null) {
+                sbTeam.color(color);
+            }
+            for (UUID memberId : team.members()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null && !sbTeam.hasEntry(member.getName())) {
+                    sbTeam.addEntry(member.getName());
+                }
             }
         }
-        if (config.tabEnabled()) {
-            applyTab(player, team);
-        }
     }
 
-    private void applyTab(Player player, Team team) {
-        Messages messages = plugin.messages();
-        TagResolver[] tags = tags(player, team);
-        Applied before = tabs.get(player.getUniqueId());
-        // A second apply (a reload, a rejoin) keeps what was there first.
-        Component previousName = before != null ? before.previousName() : player.playerListName();
-        int previousOrder = before != null ? before.previousOrder() : player.getPlayerListOrder();
-
-        String formatKey = team != null ? "tab-format" : "tab-format-none";
-        player.playerListName(messages.render(formatKey, tags));
-        // Players with the same order are listed together, so each team forms a block.
-        int order = team != null ? team.id() + 1 : 999;
-        player.setPlayerListOrder(order);
-
-        String headerKey = team != null ? "tab-header" : "tab-header-none";
-        String footerKey = team != null ? "tab-footer" : "tab-footer-none";
-        Component header = messages.render(headerKey, tags);
-        Component footer = messages.render(footerKey, tags);
-        boolean framed = !isBlank(header) || !isBlank(footer);
-        if (framed) {
-            player.sendPlayerListHeaderAndFooter(header, footer);
-        }
-        tabs.put(player.getUniqueId(), new Applied(previousName, order, previousOrder, framed));
-    }
-
-    void clear(Player player) {
-        chatTeams.remove(player.getUniqueId());
-        Applied applied = tabs.remove(player.getUniqueId());
-        if (applied == null) {
+    private void updatePlayerScoreboard(Scoreboard board, Player player, Team team) {
+        if (board == null || player == null) {
             return;
         }
-        // The name goes back unconditionally: comparing it with what was set is
-        // unreliable, because the server hands back a converted copy.
-        player.playerListName(applied.previousName());
-        if (player.getPlayerListOrder() == applied.order()) {
-            player.setPlayerListOrder(applied.previousOrder());
+        removeFromBingoTeams(board, player.getName());
+        if (team == null) {
+            return;
         }
-        if (applied.framed()) {
-            player.sendPlayerListHeaderAndFooter(Component.empty(), Component.empty());
+        String teamKey = teamKey(team);
+        org.bukkit.scoreboard.Team sbTeam = board.getTeam(teamKey);
+        if (sbTeam == null) {
+            sbTeam = board.registerNewTeam(teamKey);
+        }
+        NamedTextColor color = NamedTextColor.nearestTo(team.color());
+        if (color != null) {
+            sbTeam.color(color);
+        }
+        if (!sbTeam.hasEntry(player.getName())) {
+            sbTeam.addEntry(player.getName());
         }
     }
 
-    void clearAll() {
-        for (UUID playerId : new ArrayList<>(tabs.keySet())) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null) {
-                clear(player);
+    public void clear(Player player) {
+        if (player == null) {
+            return;
+        }
+        removeFromBingoTeams(player.getScoreboard(), player.getName());
+        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
+        if (mainBoard != player.getScoreboard()) {
+            removeFromBingoTeams(mainBoard, player.getName());
+        }
+    }
+
+    public void clearAll() {
+        Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
+        cleanScoreboard(mainBoard);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getScoreboard() != mainBoard) {
+                cleanScoreboard(player.getScoreboard());
             }
         }
-        tabs.clear();
-        chatTeams.clear();
     }
 
-    /** A player left the server; the tab state dies with their session. */
-    void forget(UUID playerId) {
-        tabs.remove(playerId);
-        chatTeams.remove(playerId);
+    public void forget(UUID playerId) {
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null) {
+            clear(player);
+        }
     }
 
-    /** Runs on the chat thread. */
-    void styleChat(AsyncChatEvent event) {
-        BingoConfig config = plugin.bingoConfig();
-        if (config == null || !config.chatEnabled()) {
+    private void cleanScoreboard(Scoreboard board) {
+        if (board == null) {
             return;
         }
-        Team team = chatTeams.get(event.getPlayer().getUniqueId());
-        Messages messages = plugin.messages();
-        String templateKey = team != null ? "chat-format" : "chat-format-none";
-        // A template without <message> would swallow what players write.
-        if (!messages.templateHas(templateKey, "<message>")) {
-            if (!warnedAboutChatFormat) {
-                warnedAboutChatFormat = true;
-                plugin.getLogger().warning(templateKey + " has no <message>, so chat is left as it is until it does");
+        Set<org.bukkit.scoreboard.Team> toRemove = new HashSet<>();
+        for (org.bukkit.scoreboard.Team t : board.getTeams()) {
+            if (t.getName().startsWith(PREFIX)) {
+                toRemove.add(t);
             }
+        }
+        for (org.bukkit.scoreboard.Team t : toRemove) {
+            t.unregister();
+        }
+    }
+
+    private void removeFromBingoTeams(Scoreboard board, String entry) {
+        if (board == null || entry == null) {
             return;
         }
-        TagResolver teamTag = team != null ? Game.teamPlaceholder(team) : Placeholder.component("team", Component.empty());
-        TagResolver teamUpperTag = Placeholder.unparsed("team-upper", team != null ? team.name().toUpperCase() : "");
-        TagResolver colorTag = team != null ? TagResolver.resolver("color", Tag.styling(team.color())) : TagResolver.resolver("color", Tag.styling(NamedTextColor.WHITE));
-        TagResolver initialTag = Placeholder.unparsed("initial", team != null ? TeamLabel.initial(team.name()) : "");
-
-        event.renderer(ChatRenderer.viewerUnaware((source, name, message) -> messages.render(templateKey,
-                teamTag,
-                teamUpperTag,
-                Placeholder.component("player", name),
-                Placeholder.component("message", message),
-                initialTag,
-                colorTag)));
+        for (org.bukkit.scoreboard.Team t : board.getTeams()) {
+            if (t.getName().startsWith(PREFIX) && t.hasEntry(entry)) {
+                t.removeEntry(entry);
+            }
+        }
     }
 
-    private static TagResolver[] tags(Player player, Team team) {
-        TagResolver teamTag = team != null ? Game.teamPlaceholder(team) : Placeholder.component("team", Component.empty());
-        TagResolver teamUpperTag = Placeholder.unparsed("team-upper", team != null ? team.name().toUpperCase() : "");
-        TagResolver colorTag = team != null ? TagResolver.resolver("color", Tag.styling(team.color())) : TagResolver.resolver("color", Tag.styling(NamedTextColor.GRAY));
-        TagResolver initialTag = Placeholder.unparsed("initial", team != null ? TeamLabel.initial(team.name()) : "");
-        return new TagResolver[]{
-                teamTag,
-                teamUpperTag,
-                Placeholder.unparsed("player", player.getName()),
-                initialTag,
-                colorTag
-        };
-    }
-
-    private static boolean isBlank(Component component) {
-        return PlainTextComponentSerializer.plainText().serialize(component).isBlank();
+    private static String teamKey(Team team) {
+        String name = team.name().toLowerCase(Locale.ROOT);
+        if (name.length() > 10) {
+            name = name.substring(0, 10);
+        }
+        return PREFIX + team.id() + "_" + name;
     }
 }
