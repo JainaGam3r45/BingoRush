@@ -30,6 +30,11 @@ public final class SeasonSettings {
         this.giftSettings = giftSettings != null ? giftSettings : GiftSettings.disabled();
     }
 
+    /** A season that never runs, for when config.yml could not be read. */
+    public static SeasonSettings off() {
+        return new SeasonSettings(false, new SeasonWindow(0, 0, 0, 0), false, false, false, 0, GiftSettings.disabled());
+    }
+
     public boolean enabled() {
         return enabled;
     }

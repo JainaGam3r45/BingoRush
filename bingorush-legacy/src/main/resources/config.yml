@@ -282,7 +282,7 @@ season:
   # Visual effects during active season.
   snowfall: true
   claim-firework: true
-  lobby-snow: false
+  lobby-snow: true
   # Radius in blocks around lobby spawn for seasonal visual changes (0 disables).
   lobby-radius: 25
   # Seasonal gift hunt in lobbies ("The Search" style hidden presents).
