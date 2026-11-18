@@ -13,7 +13,9 @@ Teams compete on a shared 5x5 card. The first team to complete a line or the who
 - Lives turn deaths into knockouts. A player who runs out watches as a spectator, and the last team standing wins. One life is hardcore.
 - When time runs out, the team with the most cells wins, and the earlier last claim breaks a tie.
 - The card also shows up as its own tab in the advancements screen, with your team's cells marked as done.
-- Optionally, players on a team show in their team color in the tab list and in chat; the Modern jar also groups the tab by team. Both are off by default (`tab.enabled`, `chat.enabled`) because another tab or chat plugin may own them; the texts are in the language files.
+- Team members show their team color in nametags and the player list natively via scoreboard teams. Chat formatting is delegated to placeholders to avoid clashing with other plugins.
+- Waiting lobby with `/bingo setlobby` and `/bingo lobby`; players are automatically teleported to the lobby when a round finishes.
+- Interactive signs (`[bingo]`) show map state and player counts, letting players join with a right-click.
 - A player who joins after the start can be put in a team or made a spectator (`late-join`), and `/bingo spectate` lets anyone without a team watch.
 - An unfinished round is saved to disk and comes back paused after a crash or restart.
 - Finished matches are logged to `data/matches/` and can be browsed in game.
@@ -43,9 +45,11 @@ Player commands (`bingo.play`):
 
 - `/bingo` or `/b`: help.
 - `/bingo join [team]`: joins a team, or lets you pick one when several have room.
+- `/bingo randomjoin` or `/bingo autojoin`: joins the team with the fewest members.
 - `/bingo teams` or `/teams`: team selector menu.
 - `/bingo card` or `/card`: opens your team's card.
 - `/bingo coords` or `/bingo c`: sends your coordinates to your team.
+- `/bingo lobby`: teleports to the waiting lobby.
 - `/bingo leave`: leaves your team.
 - `/bingo spectate`: watches the running round from spectator mode, if you are not on a team.
 - `/bingo version`: shows the installed version; admins also get an update check.
@@ -56,6 +60,7 @@ Admin commands (`bingo.admin`):
 - `/bingo start [items|advancements] [lockout:true|false] [seed]`: starts a round.
 - `/bingo stop`, `/bingo pause`, `/bingo resume`: control the running round.
 - `/bingo reroll`: prepares a new card for the next round.
+- `/bingo setlobby`: sets the waiting lobby spawn at your current position.
 - `/bingo card <team>`: watches a team's card, for casters.
 - `/bingo teams <add|remove|join|clear>`: manages teams and assignments.
 - `/bingo history [page|id]`, `/bingo history clear`, `/bingo export <id>`: match history.
@@ -87,15 +92,45 @@ Files live in `plugins/BingoRush/`. New keys are added to existing files on star
 | `round-chat.deaths` | `custom` | Death message format: `custom`, `vanilla`, or `hidden`. | None. |
 | `round-chat.advancements` | `custom` (Modern) / `vanilla` (Legacy) | Advancement message format: `custom`, `vanilla`, or `hidden`. | Defaults to `vanilla` on Legacy (see limits below). |
 | `advancement-tab` | `true` (Modern) / `false` (Legacy) | Shows the round card as a tab in the advancements screen (L). | Starts off on Legacy due to reload cost on 1.12+. |
-| `tab.enabled` | `false` | Colors player names by team in the player list. | Modern also groups tab by team. |
-| `tab.header` | `true` | Custom header for the player list. | None. |
-| `tab.footer` | `true` | Custom footer for the player list. | None. |
-| `chat.enabled` | `false` | Formats in-game chat with team colors and prefixes. | None. |
+| `lobby.world` | `""` | World name for the lobby spawn point. Set via `/bingo setlobby`. | None. |
+| `maps` | `partida-1`, `partida-2` | Map entries with name, seed, mode and time limit for signs and random join. | None. |
 | `update-notifier.enabled` | `true` | Checks GitHub releases for newer versions. | None. |
 | `update-notifier.on-join` | `true` | Alerts admins with permission on server join. | None. |
 | `update-notifier.check-interval-hours` | `24` | Hours between automatic background checks. 0 disables. | None. |
 | `history.enabled` | `true` | Saves match summaries to `data/matches/` as JSON. | None. |
 | `history.max-saved-matches` | `50` | Maximum match records to retain on disk. | None. |
+
+## Placeholders and API
+
+When PlaceholderAPI is installed, BingoRush exposes `%bingorush_*%` placeholders:
+
+- `%bingorush_in_game%`: `yes` or `no` if the player is participating in an active round.
+- `%bingorush_has_team%`: `yes` or `no` if the player has chosen a team.
+- `%bingorush_team%`: Colored team name.
+- `%bingorush_team_name%`: Plain team name without color.
+- `%bingorush_team_color%`: Hex color code of the team.
+- `%bingorush_team_prefix%`: Team prefix with brackets and team color.
+- `%bingorush_team_score%`: Current claimed cells of the player's team.
+- `%bingorush_team_members%`: Member count of the player's team.
+- `%bingorush_lives%`: Remaining lives for the player (`∞` if unlimited).
+- `%bingorush_status%`: Game state (`WAITING`, `COUNTDOWN`, `RUNNING`, `PAUSED`).
+- `%bingorush_players_count%`: Total players currently assigned to teams.
+- `%bingorush_max_players%`: Maximum capacity across all teams.
+- `%bingorush_time_left%`: Formatted remaining time (`mm:ss`).
+- `%bingorush_leading_team%`: Name of the team currently in the lead.
+
+Other plugins can access the public API through Bukkit's `ServicesManager`:
+
+```java
+BingoRushAPI api = Bukkit.getServicesManager().load(BingoRushAPI.class);
+```
+
+Custom Bukkit events in `com.jifercraft.bingo.api.events`:
+- `BingoRoundStartEvent`: fires when a round starts.
+- `BingoRoundEndEvent`: fires when a round concludes.
+- `BingoClaimEvent`: fires when a team claims an item or advancement cell.
+- `BingoTeamJoinEvent`: fires when a player joins a team.
+- `BingoTeamLeaveEvent`: fires when a player leaves a team.
 
 ## Known limits on Legacy
 
