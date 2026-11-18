@@ -200,6 +200,17 @@ public final class RoundListener implements Listener {
     }
 
 
+    @SuppressWarnings("removal")
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSpawnLocation(org.spigotmc.event.player.PlayerSpawnLocationEvent event) {
+        if (game.shouldSpawnAtLobby(event.getPlayer().getUniqueId())) {
+            org.bukkit.Location lobby = game.lobbyLocation();
+            if (lobby != null) {
+                event.setSpawnLocation(lobby);
+            }
+        }
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         game.playerJoined(event.getPlayer());

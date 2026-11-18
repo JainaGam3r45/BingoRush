@@ -184,6 +184,28 @@ public final class Game {
                 Placeholder.unparsed("z", String.format(Locale.ROOT, "%.1f", loc.getZ())));
     }
 
+    public Location lobbyLocation() {
+        BingoConfig cfg = plugin.bingoConfig();
+        return (cfg != null && cfg.hasConfiguredLobby()) ? cfg.lobbyLocation() : null;
+    }
+
+    /**
+     * True when a connecting player should appear at the lobby:
+     * the lobby is configured, and the player is not reconnecting to an
+     * active match they participate in.
+     */
+    public boolean shouldSpawnAtLobby(UUID playerId) {
+        if (lobbyLocation() == null) {
+            return false;
+        }
+        if (round != null && teams.of(playerId) != null) {
+            // Player disconnected during an active round they are part of;
+            // they must return to their place in the match.
+            return false;
+        }
+        return true;
+    }
+
     public void teleportToLobby(Player player) {
         BingoConfig cfg = plugin.bingoConfig();
         if (cfg == null || !cfg.hasConfiguredLobby()) {
@@ -945,6 +967,11 @@ public final class Game {
                         && !savedGameModes.containsKey(player.getUniqueId())) {
                     startSpectating(player);
                     messages().send(player, "late-join-spectate");
+                } else if (shouldSpawnAtLobby(player.getUniqueId())) {
+                    Location lobby = lobbyLocation();
+                    if (lobby != null) {
+                        player.teleport(lobby);
+                    }
                 }
             }
             if (team != null) {
@@ -957,6 +984,12 @@ public final class Game {
             // A member who was offline when the round ended, with
             // clear-inventories off, still carries the card.
             removeCardItems(player);
+            if (shouldSpawnAtLobby(player.getUniqueId())) {
+                Location lobby = lobbyLocation();
+                if (lobby != null) {
+                    player.teleport(lobby);
+                }
+            }
         }
     }
 
