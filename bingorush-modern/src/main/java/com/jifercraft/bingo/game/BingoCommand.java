@@ -2,6 +2,8 @@ package com.jifercraft.bingo.game;
 
 import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.config.Messages;
+import com.jifercraft.bingo.season.Season;
+import com.jifercraft.bingo.season.SeasonPhase;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -30,7 +32,7 @@ public final class BingoCommand {
     private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = List.of(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "setlobby", "history", "export", "reload");
+            "setlobby", "history", "export", "reload", "season");
 
     private final BingoRush plugin;
     private final Game game;
@@ -182,6 +184,19 @@ public final class BingoCommand {
                                 .suggests(this::suggestMatchIds)
                                 .executes(ctx -> run(ctx, sender ->
                                         game.exportMatch(sender, StringArgumentType.getString(ctx, "id"))))))
+                .then(Commands.literal("season")
+                        .requires(this::isAdmin)
+                        .executes(this::seasonStatus)
+                        .then(Commands.literal("status").executes(this::seasonStatus))
+                        .then(Commands.literal("phase")
+                                .then(Commands.argument("phase", StringArgumentType.word())
+                                        .suggests(this::suggestPhases)
+                                        .executes(this::seasonPhase)))
+                        .then(Commands.literal("reset").executes(this::seasonReset))
+                        .then(Commands.literal("restore").executes(this::seasonRestore))
+                        .then(Commands.literal("test")
+                                .then(Commands.literal("snowfall").executes(ctx -> runForPlayer(ctx, this::testSnowfall)))
+                                .then(Commands.literal("claim").executes(ctx -> runForPlayer(ctx, this::testClaimFirework)))))
                 .build();
     }
 
@@ -335,6 +350,95 @@ public final class BingoCommand {
         for (var summary : plugin.matchHistory().summaries()) {
             if (summary.id().toLowerCase(Locale.ROOT).startsWith(remaining)) {
                 builder.suggest(summary.id());
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private int seasonStatus(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season == null || !season.settings().enabled()) {
+            plugin.messages().send(sender, "season.disabled");
+            return Command.SINGLE_SUCCESS;
+        }
+        SeasonPhase phase = season.currentPhase();
+        long remaining = season.settings().window().remainingMillisInPhase(season.clock().currentTimeMillis());
+        long remSeconds = Math.max(0, remaining / 1000L);
+        String remainingFormatted = String.format(Locale.ROOT, "%02dh %02dm %02ds",
+                remSeconds / 3600, (remSeconds % 3600) / 60, remSeconds % 60);
+        plugin.messages().send(sender, "season.status",
+                Placeholder.unparsed("phase", phase.name()),
+                Placeholder.unparsed("remaining", remainingFormatted));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int seasonPhase(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season == null) {
+            plugin.messages().send(sender, "season.disabled");
+            return Command.SINGLE_SUCCESS;
+        }
+        String phaseName = StringArgumentType.getString(ctx, "phase").toUpperCase(Locale.ROOT);
+        try {
+            SeasonPhase phase = SeasonPhase.valueOf(phaseName);
+            season.simulatePhase(phase);
+            plugin.messages().send(sender, "season.simulated",
+                    Placeholder.unparsed("phase", phase.name()));
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage("Unknown phase: " + phaseName);
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int seasonReset(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season != null) {
+            season.resetClock();
+            return seasonStatus(ctx);
+        }
+        plugin.messages().send(sender, "season.disabled");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int seasonRestore(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season == null) {
+            plugin.messages().send(sender, "season.disabled");
+            return Command.SINGLE_SUCCESS;
+        }
+        int count = season.restoreBlocks();
+        if (count > 0) {
+            plugin.messages().send(sender, "season.restored",
+                    Placeholder.unparsed("count", String.valueOf(count)));
+        } else {
+            plugin.messages().send(sender, "season.no-blocks");
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private void testSnowfall(Player player) {
+        Season season = plugin.season();
+        if (season != null) {
+            season.onCountdownSnow(player.getLocation());
+        }
+    }
+
+    private void testClaimFirework(Player player) {
+        Season season = plugin.season();
+        if (season != null) {
+            season.onClaim(player);
+        }
+    }
+
+    private CompletableFuture<Suggestions> suggestPhases(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        String rem = builder.getRemainingLowerCase();
+        for (SeasonPhase p : SeasonPhase.values()) {
+            if (p.name().toLowerCase(Locale.ROOT).startsWith(rem)) {
+                builder.suggest(p.name().toLowerCase(Locale.ROOT));
             }
         }
         return builder.buildFuture();

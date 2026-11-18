@@ -12,6 +12,7 @@ import com.jifercraft.bingo.game.RoundListener;
 import com.jifercraft.bingo.game.SignManager;
 import com.jifercraft.bingo.game.Teams;
 import com.jifercraft.bingo.history.MatchHistory;
+import com.jifercraft.bingo.season.Season;
 import com.jifercraft.bingo.updater.UpdateChecker;
 import java.io.File;
 import java.io.IOException;
@@ -37,6 +38,7 @@ public final class BingoRush extends JavaPlugin {
     private Game game;
     private UpdateChecker updateChecker;
     private MatchHistory matchHistory;
+    private Season season;
 
     @Override
     public void onEnable() {
@@ -134,6 +136,12 @@ public final class BingoRush extends JavaPlugin {
             updateChecker.startPeriodicCheck();
         }
 
+        if (bingoConfig != null && bingoConfig.seasonSettings() != null) {
+            season = new Season(this, bingoConfig.seasonSettings());
+            getServer().getPluginManager().registerEvents(season, this);
+            season.start();
+        }
+
         messages.console("Enabled <hl>v<version></hl> <muted>(<mode>, <teams> teams, Minecraft <server>)</muted>",
                 Placeholder.unparsed("version", getDescription().getVersion()),
                 Placeholder.unparsed("mode", bingoConfig == null ? "config broken"
@@ -144,6 +152,9 @@ public final class BingoRush extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (season != null) {
+            season.stop();
+        }
         if (updateChecker != null) {
             updateChecker.stopPeriodicCheck();
         }
@@ -157,6 +168,10 @@ public final class BingoRush extends JavaPlugin {
             messages.console("Disabled");
             messages.close();
         }
+    }
+
+    public Season season() {
+        return season;
     }
 
     public Messages messages() {

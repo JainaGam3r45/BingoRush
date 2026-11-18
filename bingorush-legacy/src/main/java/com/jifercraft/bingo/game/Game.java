@@ -1235,6 +1235,12 @@ public final class Game {
             beginRun();
         } else {
             hud.countdownTick(secondsLeft);
+            if (plugin.season() != null && plugin.bingoConfig() != null) {
+                Location lobby = plugin.bingoConfig().lobbyLocation();
+                if (lobby != null) {
+                    plugin.season().onCountdownSnow(lobby);
+                }
+            }
         }
     }
 

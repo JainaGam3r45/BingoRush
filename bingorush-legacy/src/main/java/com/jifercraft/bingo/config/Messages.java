@@ -183,6 +183,14 @@ public final class Messages {
         audiences.sender(to).sendMessage(message);
     }
 
+    public void broadcast(String key, TagResolver... placeholders) {
+        Component message = render(key, placeholders);
+        for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+            audiences.player(player).sendMessage(message);
+        }
+        audiences.console().sendMessage(message);
+    }
+
     /** Titles, action bars, boss bars and sounds for one player. */
     public Audience audience(Player player) {
         return audiences.player(player);

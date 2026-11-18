@@ -24,6 +24,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -167,6 +168,14 @@ public final class Messages {
      */
     public void send(CommandSender to, String key, TagResolver... placeholders) {
         to.sendMessage(render(key, placeholders));
+    }
+
+    public void broadcast(String key, TagResolver... placeholders) {
+        Component message = render(key, placeholders);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.sendMessage(message);
+        }
+        Bukkit.getConsoleSender().sendMessage(message);
     }
 
     /**

@@ -3,6 +3,8 @@ package com.jifercraft.bingo.game;
 import com.jifercraft.bingo.BingoRush;
 import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.history.MatchSummary;
+import com.jifercraft.bingo.season.Season;
+import com.jifercraft.bingo.season.SeasonPhase;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,11 +29,11 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
     private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = Arrays.asList(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "setlobby", "history", "export", "reload");
+            "setlobby", "history", "export", "reload", "season");
     private static final List<String> PLAYER_SUBCOMMANDS = Arrays.asList(
             "help", "version", "join", "leave", "spectate", "coords", "c", "card", "teams", "lobby", "randomjoin", "autojoin");
     private static final List<String> ADMIN_SUBCOMMANDS = Arrays.asList(
-            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "setlobby", "history", "export");
+            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "setlobby", "history", "export", "season");
 
     private final BingoRush plugin;
     private final Game game;
@@ -155,8 +157,77 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                     messages().send(sender, "help.export");
                 }
                 break;
+            case "season":
+                season(sender, args, admin);
+                break;
             default:
                 help(sender);
+        }
+    }
+
+    private void season(CommandSender sender, String[] args, boolean admin) {
+        if (!admin) {
+            messages().send(sender, "no-permission");
+            return;
+        }
+        Season season = plugin.season();
+        if (season == null || !season.settings().enabled()) {
+            messages().send(sender, "season.disabled");
+            return;
+        }
+        if (args.length == 1 || (args.length > 1 && args[1].equalsIgnoreCase("status"))) {
+            SeasonPhase phase = season.currentPhase();
+            long remaining = season.settings().window().remainingMillisInPhase(season.clock().currentTimeMillis());
+            long remSeconds = Math.max(0, remaining / 1000L);
+            String remainingFormatted = String.format(Locale.ROOT, "%02dh %02dm %02ds",
+                    remSeconds / 3600, (remSeconds % 3600) / 60, remSeconds % 60);
+            messages().send(sender, "season.status",
+                    Placeholder.unparsed("phase", phase.name()),
+                    Placeholder.unparsed("remaining", remainingFormatted));
+            return;
+        }
+        switch (args[1].toLowerCase(Locale.ROOT)) {
+            case "phase":
+                if (args.length < 3) {
+                    sender.sendMessage("Usage: /bingo season phase <inactive|pre_season|active|wrap_up>");
+                    return;
+                }
+                String phaseName = args[2].toUpperCase(Locale.ROOT);
+                try {
+                    SeasonPhase phase = SeasonPhase.valueOf(phaseName);
+                    season.simulatePhase(phase);
+                    messages().send(sender, "season.simulated",
+                            Placeholder.unparsed("phase", phase.name()));
+                } catch (IllegalArgumentException e) {
+                    sender.sendMessage("Unknown phase: " + phaseName);
+                }
+                break;
+            case "reset":
+                season.resetClock();
+                season(sender, new String[]{"season", "status"}, true);
+                break;
+            case "restore":
+                int count = season.restoreBlocks();
+                if (count > 0) {
+                    messages().send(sender, "season.restored",
+                            Placeholder.unparsed("count", String.valueOf(count)));
+                } else {
+                    messages().send(sender, "season.no-blocks");
+                }
+                break;
+            case "test":
+                if (sender instanceof Player && args.length > 2) {
+                    Player p = (Player) sender;
+                    if (args[2].equalsIgnoreCase("snowfall")) {
+                        season.onCountdownSnow(p.getLocation());
+                    } else if (args[2].equalsIgnoreCase("claim")) {
+                        season.onClaim(p);
+                    }
+                }
+                break;
+            default:
+                sender.sendMessage("Usage: /bingo season [status|phase|reset|restore|test]");
+                break;
         }
     }
 
@@ -312,9 +383,18 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                         ids.add(summary.id());
                     }
                     return matching(ids, args[1]);
+                case "season":
+                    return admin ? matching(Arrays.asList("status", "phase", "reset", "restore", "test"), args[1])
+                            : Collections.<String>emptyList();
                 default:
                     return Collections.emptyList();
             }
+        }
+        if (admin && sub.equals("season") && args.length == 3 && args[1].equalsIgnoreCase("phase")) {
+            return matching(Arrays.asList("inactive", "pre_season", "active", "wrap_up"), args[2]);
+        }
+        if (admin && sub.equals("season") && args.length == 3 && args[1].equalsIgnoreCase("test")) {
+            return matching(Arrays.asList("snowfall", "claim"), args[2]);
         }
         if (admin && sub.equals("start") && args.length == 3) {
             return matching(Arrays.asList("lockout:true", "lockout:false"), args[2]);
