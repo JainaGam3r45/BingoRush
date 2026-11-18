@@ -199,9 +199,35 @@ public final class TeamMenu {
         if (count == 0) {
             return;
         }
-        int start = (COLUMNS - count) / 2;
+        int[] offsets = slotOffsets(count);
         for (int i = 0; i < count; i++) {
-            top.setItem(row * COLUMNS + start + i, teamItem(rowTeams.get(i), viewer));
+            top.setItem(row * COLUMNS + offsets[i], teamItem(rowTeams.get(i), viewer));
+        }
+    }
+
+    private static int[] slotOffsets(int count) {
+        switch (count) {
+            case 1:
+                return new int[]{4};
+            case 2:
+                return new int[]{3, 5};
+            case 3:
+                return new int[]{2, 4, 6};
+            case 4:
+                return new int[]{1, 3, 5, 7};
+            case 5:
+                return new int[]{2, 3, 4, 5, 6};
+            case 6:
+                return new int[]{1, 2, 3, 5, 6, 7};
+            case 7:
+                return new int[]{1, 2, 3, 4, 5, 6, 7};
+            default:
+                int[] slots = new int[count];
+                int start = (COLUMNS - count) / 2;
+                for (int i = 0; i < count; i++) {
+                    slots[i] = start + i;
+                }
+                return slots;
         }
     }
 
