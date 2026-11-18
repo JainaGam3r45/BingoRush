@@ -24,14 +24,14 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "spectate", "coords", "version");
+    private static final List<String> PLAYER_HELP = Arrays.asList("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = Arrays.asList(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "history", "export", "reload");
+            "setlobby", "history", "export", "reload");
     private static final List<String> PLAYER_SUBCOMMANDS = Arrays.asList(
-            "help", "version", "join", "leave", "spectate", "coords", "c", "card", "teams");
+            "help", "version", "join", "leave", "spectate", "coords", "c", "card", "teams", "lobby", "randomjoin", "autojoin");
     private static final List<String> ADMIN_SUBCOMMANDS = Arrays.asList(
-            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "history", "export");
+            "start", "setup", "stop", "pause", "resume", "reroll", "reload", "setlobby", "history", "export");
 
     private final BingoRush plugin;
     private final Game game;
@@ -82,6 +82,16 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                 break;
             case "version":
                 version(sender, admin);
+                break;
+            case "setlobby":
+                asPlayer(sender, "bingo.admin", game::setLobby);
+                break;
+            case "lobby":
+                asPlayer(sender, "bingo.play", game::teleportToLobby);
+                break;
+            case "randomjoin":
+            case "autojoin":
+                asPlayer(sender, "bingo.play", game::randomJoin);
                 break;
             case "join":
                 asPlayer(sender, null, player -> game.joinTeam(player, args.length > 1 ? args[1] : null));

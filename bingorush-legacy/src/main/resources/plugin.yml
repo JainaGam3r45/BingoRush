@@ -6,6 +6,7 @@ api-version: '1.13'
 author: JainaGam3r45
 website: https://www.jifercraft.com
 description: Bingo minigame for live events
+softdepend: [PlaceholderAPI]
 
 commands:
   bingo:

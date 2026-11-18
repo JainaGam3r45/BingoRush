@@ -9,11 +9,13 @@ description = "Bingo minigame for live events on Paper 26.x and newer"
 repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     mavenCentral()
+    maven("https://repo.extendedclip.com/releases/")
 }
 
 dependencies {
     implementation(project(":bingorush-core"))
     compileOnly("io.papermc.paper:paper-api:26.3.build.253-stable")
+    compileOnly("me.clip:placeholderapi:2.11.6")
     testImplementation("io.papermc.paper:paper-api:26.3.build.253-stable")
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))

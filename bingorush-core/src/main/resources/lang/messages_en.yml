@@ -41,9 +41,30 @@ help:
   history: "<white>/bingo history <hl>[id|page]</hl></white> <muted>|</muted> <body>Browse past matches"
   export: "<white>/bingo export <hl><id></hl></white> <muted>|</muted> <body>Show where a match file is saved"
   version: "<white>/bingo version</white> <muted>|</muted> <body>Show the version and check for updates"
+  lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teleport to the waiting lobby"
+  randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Join an available game"
+  setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Set the waiting lobby location"
 
 no-permission: "<prefix><err>You don't have permission to do that."
 players-only: "<prefix><err>This command only works in game."
+
+# Lobby.
+lobby-set: "<prefix><ok>Lobby location set to <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
+lobby-teleported: "<prefix><body>Teleported to the lobby."
+lobby-not-set: "<prefix><err>No lobby has been set yet. An admin can set one with <hl>/bingo setlobby</hl>."
+
+# Signs and game joining.
+sign-created: "<prefix><ok>Bingo sign created for map <hl><map></hl>.</ok>"
+sign-removed: "<prefix><body>Bingo sign removed."
+sign-cannot-break: "<prefix><err>Only admins can break Bingo signs."
+sign-game-full: "<prefix><err>That game is full."
+sign-already-running: "<prefix><err>That game has already started."
+sign-status-waiting: "<green>[WAITING]</green>"
+sign-status-starting: "<yellow>[STARTING]</yellow>"
+sign-status-paused: "<gold>[PAUSED]</gold>"
+sign-status-in-game: "<red>[IN GAME]</red>"
+randomjoin-none-available: "<prefix><err>There are no games available to join right now."
+randomjoin-joined: "<prefix><body>Joined game <hl><map></hl>."
 
 # Teams.
 team-joined: "<prefix><body>You joined team <team><body>."
@@ -126,17 +147,6 @@ card-tab-description: "<body>Your team's card for this round.<br><muted>Seed <se
 card-tab-cell-title: "<hl>#<number></hl> <white><item>"
 card-tab-cell-description: "<body><detail><br><muted>Row <row>, column <column>"
 card-tab-cell-item: "Have it in your inventory to mark it."
-# Tab list and chat for players, used when tab.enabled or chat.enabled is on
-# in config.yml. <color> is the team color, <team-upper> the uppercase name,
-# <initial> the initial and <team> the colored name.
-tab-format: "<color><initial> <player></color>"
-tab-format-none: "<gray><player></gray>"
-tab-header: "<newline><brand><newline><muted>Team</muted> <team><newline>"
-tab-header-none: "<newline><brand><newline><muted>No team</muted><newline>"
-tab-footer: "<newline><muted>jifercraft.com</muted><newline>"
-tab-footer-none: "<newline><muted>jifercraft.com</muted><newline>"
-chat-format: "<color><b><team-upper></b> <player></color><muted> »</muted> <message>"
-chat-format-none: "<white><player></white><muted> »</muted> <message>"
 
 # Match breakdown.
 breakdown:

@@ -2,12 +2,18 @@ package com.jifercraft.bingo.game;
 
 import com.cryptomorin.xseries.XMaterial;
 import com.jifercraft.bingo.BingoRush;
+import com.jifercraft.bingo.api.events.BingoClaimEvent;
+import com.jifercraft.bingo.api.events.BingoRoundEndEvent;
+import com.jifercraft.bingo.api.events.BingoRoundStartEvent;
+import com.jifercraft.bingo.api.events.BingoTeamJoinEvent;
+import com.jifercraft.bingo.api.events.BingoTeamLeaveEvent;
 import com.jifercraft.bingo.card.BingoCard;
 import com.jifercraft.bingo.card.CardGenerator;
 import com.jifercraft.bingo.card.ClaimBoard;
 import com.jifercraft.bingo.card.ItemPool;
 import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.compat.AdvancementSupport;
+import org.bukkit.configuration.file.FileConfiguration;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.ChatStyle;
@@ -96,6 +102,7 @@ public final class Game {
     private long roundTimeLimit;
     private int secondsLeft;
     private boolean roundRestoredUnfinished;
+    private SignManager signManager;
 
     public Game(BingoRush plugin, Teams teams) {
         this.plugin = plugin;
@@ -110,6 +117,127 @@ public final class Game {
         this.advancements = AdvancementSupport.load(plugin, this);
         this.pendingRestores = new PendingRestores(new File(plugin.getDataFolder(), "data/pending-restores.json"),
                 plugin.getLogger(), advancements);
+    }
+
+    public SignManager signManager() {
+        return signManager;
+    }
+
+    public void signManager(SignManager signManager) {
+        this.signManager = signManager;
+    }
+
+    public int timeLeftSeconds() {
+        return round != null ? secondsLeft : 0;
+    }
+
+    public String formattedTimeLeft() {
+        if (round == null || roundTimeLimit <= 0) {
+            return "∞";
+        }
+        int minutes = secondsLeft / 60;
+        int seconds = secondsLeft % 60;
+        return String.format(Locale.ROOT, "%02d:%02d", minutes, seconds);
+    }
+
+    public Team leadingTeam() {
+        if (round == null) {
+            return null;
+        }
+        Team leading = null;
+        int max = -1;
+        for (Team team : teams.all()) {
+            int score = round.board().count(team.id());
+            if (score > max && score > 0) {
+                max = score;
+                leading = team;
+            }
+        }
+        return leading;
+    }
+
+    public int leadingScore() {
+        Team leader = leadingTeam();
+        if (leader == null || round == null) {
+            return 0;
+        }
+        return round.board().count(leader.id());
+    }
+
+    public void setLobby(Player player) {
+        Location loc = player.getLocation();
+        FileConfiguration cfg = plugin.getConfig();
+        cfg.set("lobby.world", loc.getWorld().getName());
+        cfg.set("lobby.x", loc.getX());
+        cfg.set("lobby.y", loc.getY());
+        cfg.set("lobby.z", loc.getZ());
+        cfg.set("lobby.yaw", loc.getYaw());
+        cfg.set("lobby.pitch", loc.getPitch());
+        plugin.saveConfig();
+        plugin.reloadSettings();
+        messages().send(player, "lobby-set",
+                Placeholder.unparsed("world", loc.getWorld().getName()),
+                Placeholder.unparsed("x", String.format(Locale.ROOT, "%.1f", loc.getX())),
+                Placeholder.unparsed("y", String.format(Locale.ROOT, "%.1f", loc.getY())),
+                Placeholder.unparsed("z", String.format(Locale.ROOT, "%.1f", loc.getZ())));
+    }
+
+    public void teleportToLobby(Player player) {
+        BingoConfig cfg = plugin.bingoConfig();
+        if (cfg == null || !cfg.hasConfiguredLobby()) {
+            messages().send(player, "lobby-not-set");
+            return;
+        }
+        Location loc = cfg.lobbyLocation();
+        if (loc != null) {
+            player.teleport(loc);
+            messages().send(player, "lobby-teleported");
+        } else {
+            messages().send(player, "lobby-not-set");
+        }
+    }
+
+    public void teleportAllToLobby() {
+        BingoConfig cfg = plugin.bingoConfig();
+        if (cfg == null || !cfg.hasConfiguredLobby()) {
+            return;
+        }
+        Location loc = cfg.lobbyLocation();
+        if (loc == null) {
+            return;
+        }
+        for (Team team : teams.all()) {
+            for (UUID uuid : team.members()) {
+                Player player = Bukkit.getPlayer(uuid);
+                if (player != null && player.isOnline()) {
+                    player.teleport(loc);
+                    messages().send(player, "lobby-teleported");
+                }
+            }
+        }
+    }
+
+    public void randomJoin(Player player) {
+        Team currentTeam = teams.of(player.getUniqueId());
+        if (currentTeam != null) {
+            messages().send(player, "team-already-in", teamPlaceholder(currentTeam));
+            return;
+        }
+        BingoConfig config = plugin.bingoConfig();
+        int maxPerTeam = cap(config);
+        Team best = null;
+        int minCount = Integer.MAX_VALUE;
+        for (Team team : teams.all()) {
+            if (team.size() < maxPerTeam && team.size() < minCount) {
+                minCount = team.size();
+                best = team;
+            }
+        }
+        if (best == null) {
+            messages().send(player, "randomjoin-none-available");
+            return;
+        }
+        joinTargetTeam(player, best);
     }
 
     public Round round() {
@@ -273,6 +401,9 @@ public final class Game {
         }
         roundConfig = config;
         round = new Round(seed, mode, card, new ClaimBoard(winMode, lockout), lives);
+        if (signManager != null) {
+            signManager.updateAll();
+        }
         // The lobby menus are gone the moment a round exists, countdown included.
         teamMenu.closeAll();
         setupMenu.closeAll();
@@ -305,6 +436,7 @@ public final class Game {
                 Placeholder.unparsed("player", caller.getName()),
                 Placeholder.unparsed("seed", String.valueOf(round.seed())));
         broadcast("round-stopped");
+        Bukkit.getPluginManager().callEvent(new BingoRoundEndEvent(round, null, round.elapsedMs() / 1000L));
         endRound();
     }
 
@@ -365,6 +497,44 @@ public final class Game {
                 Placeholder.unparsed("seed", String.valueOf(pendingSeed)));
     }
 
+    public void joinTargetTeam(Player player, Team target) {
+        if (target == null) {
+            return;
+        }
+        BingoConfig config = plugin.bingoConfig();
+        Round current = round;
+        if (current != null && current.isEliminated(player.getUniqueId())) {
+            messages().send(player, "eliminated-cannot-join");
+            return;
+        }
+        Team currentTeam = teams.of(player.getUniqueId());
+        if (currentTeam != null) {
+            messages().send(player, "team-already-in", teamPlaceholder(currentTeam));
+            return;
+        }
+        if (current != null && current.state() != Round.State.COUNTDOWN
+                && config != null && config.lateJoin() == LateJoin.SPECTATE) {
+            lateJoinClosed(player);
+            return;
+        }
+        if (target.size() >= cap(config)) {
+            messages().send(player, "team-full", teamPlaceholder(target));
+            return;
+        }
+        target.add(player.getUniqueId());
+        knownNames.put(player.getUniqueId(), player.getName());
+        messages().send(player, "team-joined", teamPlaceholder(target));
+        Bukkit.getPluginManager().callEvent(new BingoTeamJoinEvent(player, target));
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+        teamMenu.refreshAll();
+        display.apply(player, target);
+        if (current != null) {
+            prepareTeamEntry(player, target, current);
+        }
+    }
+
     public void joinTeam(Player player, String teamName) {
         BingoConfig config = plugin.bingoConfig();
         Round current = round;
@@ -406,18 +576,7 @@ public final class Game {
                 return;
             }
         }
-        if (target.size() >= cap(config)) {
-            messages().send(player, "team-full", teamPlaceholder(target));
-            return;
-        }
-        target.add(player.getUniqueId());
-        knownNames.put(player.getUniqueId(), player.getName());
-        messages().send(player, "team-joined", teamPlaceholder(target));
-        teamMenu.refreshAll();
-        display.apply(player, target);
-        if (current != null) {
-            prepareTeamEntry(player, target, current);
-        }
+        joinTargetTeam(player, target);
     }
 
     // The player is on the team already; this is what being in a running
@@ -486,6 +645,10 @@ public final class Game {
         }
         team.remove(player.getUniqueId());
         messages().send(player, "team-left");
+        Bukkit.getPluginManager().callEvent(new BingoTeamLeaveEvent(player, team));
+        if (signManager != null) {
+            signManager.updateAll();
+        }
         teamMenu.refreshAll();
         display.apply(player, null);
         if (round != null) {
@@ -618,6 +781,7 @@ public final class Game {
         }
         if (old != null) {
             old.remove(target.getUniqueId());
+            Bukkit.getPluginManager().callEvent(new BingoTeamLeaveEvent(target, old));
         }
         team.add(target.getUniqueId());
         knownNames.put(target.getUniqueId(), target.getName());
@@ -626,6 +790,10 @@ public final class Game {
         messages().send(caller, "team-assigned",
                 Placeholder.unparsed("player", target.getName()), teamPlaceholder(team));
         messages().send(target, "team-joined", teamPlaceholder(team));
+        Bukkit.getPluginManager().callEvent(new BingoTeamJoinEvent(target, team));
+        if (signManager != null) {
+            signManager.updateAll();
+        }
         if (current != null) {
             prepareTeamEntry(target, team, current);
         }
@@ -636,6 +804,9 @@ public final class Game {
             for (UUID member : team.members()) {
                 team.remove(member);
             }
+        }
+        if (signManager != null) {
+            signManager.updateAll();
         }
         teamMenu.refreshAll();
         display.applyAll(teams.all());
@@ -993,11 +1164,6 @@ public final class Game {
         roundConfig = null;
     }
 
-    /** Chat of a team member during a round, off the main thread. */
-    public void styleChat(AsyncPlayerChatEvent event) {
-        display.styleChat(event);
-    }
-
     /** After /bingo reload: names, order and chat format follow the new settings. */
     public void settingsReloaded() {
         display.clearAll();
@@ -1114,6 +1280,10 @@ public final class Game {
         sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::sweepClaims, 20, 20);
         autosaveTask = Bukkit.getScheduler().runTaskTimer(plugin, this::autosave, 600, 600);
         saveActiveRound();
+        Bukkit.getPluginManager().callEvent(new BingoRoundStartEvent(round));
+        if (signManager != null) {
+            signManager.updateAll();
+        }
     }
 
     private void tickClock() {
@@ -1172,6 +1342,10 @@ public final class Game {
         roundRestoredUnfinished = false;
         round = null;
         roundConfig = null;
+        teleportAllToLobby();
+        if (signManager != null) {
+            signManager.updateAll();
+        }
     }
 
     private void cancelTasks() {
@@ -1356,6 +1530,7 @@ public final class Game {
         }
         current.recordFirstClaim(cell, team.id(), current.elapsedMs());
         String itemKey = current.card().item(cell);
+        Bukkit.getPluginManager().callEvent(new BingoClaimEvent(claimer, team, cell, itemKey));
         TagResolver item = Placeholder.component("item", itemName(itemKey));
         int count = current.board().count(team.id());
         broadcast("claim", item, teamPlaceholder(team),
@@ -1459,6 +1634,7 @@ public final class Game {
             return;
         }
         current.recordFirstClaim(cell, team.id(), current.elapsedMs());
+        Bukkit.getPluginManager().callEvent(new BingoClaimEvent(claimer, team, cell, key));
         Component advTitle = advancementName(key);
 
         TagResolver adv = Placeholder.component("advancement", advTitle);
@@ -2041,6 +2217,7 @@ public final class Game {
     }
 
     private void recordMatchResult(Round current, Team winner, String reason) {
+        Bukkit.getPluginManager().callEvent(new BingoRoundEndEvent(current, winner, current.elapsedMs() / 1000L));
         BingoConfig config = plugin.bingoConfig();
         if (config != null && !config.historyEnabled()) {
             return;

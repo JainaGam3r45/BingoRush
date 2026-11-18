@@ -43,17 +43,29 @@ round-chat:
 # feels when the countdown starts, so it starts off here.
 advancement-tab: false
 
-# Team colors in the player list (tab) and a team format for chat, for players
-# on a team while a round runs. Both are off by default: another tab or chat
-# plugin may already own them, since this one sets each player's list name,
-# header and footer, and the format of their chat messages. The texts are
-# tab-format, tab-header, tab-footer and chat-format in the language file.
-# When the round ends the names, the order and the chat format go back to
-# normal; a header or footer another plugin had set is not restored.
-tab:
-  enabled: false
-chat:
-  enabled: false
+# Lobby location where players wait before a round and return when it ends.
+# Use /bingo setlobby in game to configure this automatically.
+lobby:
+  world: ""
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+
+# Available game maps for signs and /bingo randomjoin.
+# Each map can have a fixed seed or "random" for survival world seeds.
+maps:
+  partida-1:
+    name: "Partida 1"
+    seed: "random"
+    mode: items
+    time-limit: 1800
+  partida-2:
+    name: "Partida 2"
+    seed: "random"
+    mode: items
+    time-limit: 1800
 
 # Round time limit in seconds. When it runs out, the team with the most
 # claimed cells wins and an earlier last claim breaks a tie. 0 means no

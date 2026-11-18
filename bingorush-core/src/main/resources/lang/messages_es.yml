@@ -37,9 +37,30 @@ help:
   history: "<white>/bingo history <hl>[id|página]</hl></white> <muted>|</muted> <body>Consulta el historial de partidas"
   export: "<white>/bingo export <hl><id></hl></white> <muted>|</muted> <body>Muestra la ruta del archivo de una partida"
   version: "<white>/bingo version</white> <muted>|</muted> <body>Muestra la versión y comprueba actualizaciones"
+  lobby: "<white>/bingo lobby</white> <muted>|</muted> <body>Teletranspórtate al lobby de espera"
+  randomjoin: "<white>/bingo randomjoin</white> <muted>|</muted> <body>Únete a una partida disponible"
+  setlobby: "<white>/bingo setlobby</white> <muted>|</muted> <body>Establece el punto de espera del lobby"
 
 no-permission: "<prefix><err>No tienes permiso para eso."
 players-only: "<prefix><err>Este comando solo se puede usar dentro del juego."
+
+# Lobby.
+lobby-set: "<prefix><ok>Punto de lobby establecido en <hl><world></hl> <muted>(<x>, <y>, <z>)</muted>.</ok>"
+lobby-teleported: "<prefix><body>Teletransportado al lobby."
+lobby-not-set: "<prefix><err>Aún no se ha establecido un lobby. Un administrador puede configurarlo con <hl>/bingo setlobby</hl>."
+
+# Signs and game joining.
+sign-created: "<prefix><ok>Cartel de Bingo creado para el mapa <hl><map></hl>.</ok>"
+sign-removed: "<prefix><body>Cartel de Bingo eliminado."
+sign-cannot-break: "<prefix><err>Solo los administradores pueden romper carteles de Bingo."
+sign-game-full: "<prefix><err>Esa partida está llena."
+sign-already-running: "<prefix><err>Esa partida ya ha comenzado."
+sign-status-waiting: "<green>[ESPERANDO]</green>"
+sign-status-starting: "<yellow>[INICIANDO]</yellow>"
+sign-status-paused: "<gold>[PAUSA]</gold>"
+sign-status-in-game: "<red>[EN JUEGO]</red>"
+randomjoin-none-available: "<prefix><err>No hay partidas disponibles para unirse en este momento."
+randomjoin-joined: "<prefix><body>Te has unido a la partida <hl><map></hl>."
 
 # Teams.
 team-joined: "<prefix><body>Te has unido al equipo <team><body>."
@@ -122,17 +143,6 @@ card-tab-description: "<body>La cartilla de tu equipo en esta ronda.<br><muted>S
 card-tab-cell-title: "<hl>#<number></hl> <white><item>"
 card-tab-cell-description: "<body><detail><br><muted>Fila <row>, columna <column>"
 card-tab-cell-item: "Tenlo en el inventario para marcarla."
-# Tab y chat de los jugadores, si tab.enabled o chat.enabled están activados
-# en config.yml. <color> es el color del equipo, <team-upper> el nombre en mayúsculas,
-# <initial> la inicial y <team> el nombre con color.
-tab-format: "<color><initial> <player></color>"
-tab-format-none: "<gray><player></gray>"
-tab-header: "<newline><brand><newline><muted>Equipo</muted> <team><newline>"
-tab-header-none: "<newline><brand><newline><muted>Sin equipo</muted><newline>"
-tab-footer: "<newline><muted>jifercraft.com</muted><newline>"
-tab-footer-none: "<newline><muted>jifercraft.com</muted><newline>"
-chat-format: "<color><b><team-upper></b> <player></color><muted> »</muted> <message>"
-chat-format-none: "<white><player></white><muted> »</muted> <message>"
 
 # Match breakdown.
 breakdown:

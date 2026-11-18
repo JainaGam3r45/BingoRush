@@ -8,6 +8,7 @@ import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.game.BingoGameMode;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,6 +20,9 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.format.TextColor;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -80,6 +84,13 @@ public final class BingoConfig {
     private final int updateCheckIntervalHours;
     private final boolean historyEnabled;
     private final int historyMaxSavedMatches;
+    private final String lobbyWorld;
+    private final double lobbyX;
+    private final double lobbyY;
+    private final double lobbyZ;
+    private final float lobbyYaw;
+    private final float lobbyPitch;
+    private final Map<String, GameMapDefinition> maps;
 
     private BingoConfig(BingoGameMode gameMode, WinMode winMode, boolean lockout, int lives,
             ChatStyle deathChat, ChatStyle advancementChat, boolean advancementTab, boolean tabEnabled, boolean chatEnabled,
@@ -89,7 +100,9 @@ public final class BingoConfig {
             ItemPool pool, ItemPool advancementPool, Map<String, XMaterial> itemsByKey,
             Map<SoundId, XSound> sounds, List<String> notes,
             List<TeamDefinition> teamDefinitions, boolean updateNotifierEnabled, boolean updateNotifierOnJoin,
-            int updateCheckIntervalHours, boolean historyEnabled, int historyMaxSavedMatches) {
+            int updateCheckIntervalHours, boolean historyEnabled, int historyMaxSavedMatches,
+            String lobbyWorld, double lobbyX, double lobbyY, double lobbyZ, float lobbyYaw, float lobbyPitch,
+            Map<String, GameMapDefinition> maps) {
         this.gameMode = gameMode;
         this.winMode = winMode;
         this.lockout = lockout;
@@ -117,6 +130,13 @@ public final class BingoConfig {
         this.updateCheckIntervalHours = updateCheckIntervalHours;
         this.historyEnabled = historyEnabled;
         this.historyMaxSavedMatches = historyMaxSavedMatches;
+        this.lobbyWorld = lobbyWorld;
+        this.lobbyX = lobbyX;
+        this.lobbyY = lobbyY;
+        this.lobbyZ = lobbyZ;
+        this.lobbyYaw = lobbyYaw;
+        this.lobbyPitch = lobbyPitch;
+        this.maps = maps;
     }
 
     public static BingoConfig load(FileConfiguration yaml) {
@@ -363,13 +383,62 @@ public final class BingoConfig {
             problems.add("history.max-saved-matches must be 0 or greater");
         }
 
+        String lobbyWorld = yaml.getString("lobby.world", "");
+        double lobbyX = yaml.getDouble("lobby.x", 0.0);
+        double lobbyY = yaml.getDouble("lobby.y", 0.0);
+        double lobbyZ = yaml.getDouble("lobby.z", 0.0);
+        float lobbyYaw = (float) yaml.getDouble("lobby.yaw", 0.0);
+        float lobbyPitch = (float) yaml.getDouble("lobby.pitch", 0.0);
+
+        Map<String, GameMapDefinition> maps = new HashMap<>();
+        ConfigurationSection mapsSec = yaml.getConfigurationSection("maps");
+        if (mapsSec != null) {
+            for (String key : mapsSec.getKeys(false)) {
+                ConfigurationSection mapSec = mapsSec.getConfigurationSection(key);
+                if (mapSec != null) {
+                    String name = mapSec.getString("name", key);
+                    String seed = mapSec.getString("seed", "random");
+                    String modeStr = mapSec.getString("mode", "items");
+                    BingoGameMode mapMode = "advancements".equalsIgnoreCase(modeStr) ? BingoGameMode.ADVANCEMENTS : BingoGameMode.ITEMS;
+                    long limit = mapSec.getLong("time-limit", timeLimit);
+                    maps.put(key.toLowerCase(Locale.ROOT), new GameMapDefinition(key, name, seed, mapMode, limit));
+                }
+            }
+        }
+
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(String.join("\n", problems));
         }
         return new BingoConfig(gameMode, winMode, lockout, lives, deathChat, advancementChat, advancementTab, tabEnabled, chatEnabled, timeLimit, countdown, teamSize, clearInventories,
                 scatterPlayers, scatterRadius, lateJoin, pool, advancementPool, types, sounds, notes,
                 teamDefinitions, updateNotifierEnabled, updateNotifierOnJoin, updateCheckIntervalHours,
-                historyEnabled, historyMaxSavedMatches);
+                historyEnabled, historyMaxSavedMatches,
+                lobbyWorld, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch, maps);
+    }
+
+    public Location lobbyLocation() {
+        if (lobbyWorld != null && !lobbyWorld.isEmpty()) {
+            World w = Bukkit.getWorld(lobbyWorld);
+            if (w != null) {
+                return new Location(w, lobbyX, lobbyY, lobbyZ, lobbyYaw, lobbyPitch);
+            }
+        }
+        return Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().get(0).getSpawnLocation();
+    }
+
+    public boolean hasConfiguredLobby() {
+        return lobbyWorld != null && !lobbyWorld.isEmpty() && Bukkit.getWorld(lobbyWorld) != null;
+    }
+
+    public Map<String, GameMapDefinition> maps() {
+        return Collections.unmodifiableMap(maps);
+    }
+
+    public GameMapDefinition getMap(String id) {
+        if (id == null) {
+            return null;
+        }
+        return maps.get(id.toLowerCase(Locale.ROOT));
     }
 
     public BingoGameMode gameMode() {

@@ -75,6 +75,14 @@ public final class Teams {
         return Collections.unmodifiableList(new ArrayList<>(teams));
     }
 
+    public int totalMembers() {
+        int total = 0;
+        for (Team team : teams) {
+            total += team.size();
+        }
+        return total;
+    }
+
     /** The team with room and the fewest players, or null when every team is full. */
     public Team withRoom(int maxSize) {
         Team best = null;

@@ -1,5 +1,7 @@
 package com.jifercraft.bingo;
 
+import com.jifercraft.bingo.api.BingoRushAPI;
+import com.jifercraft.bingo.compat.BingoRushExpansion;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.config.BingoConfig;
 import com.jifercraft.bingo.config.ConfigUpdater;
@@ -7,6 +9,7 @@ import com.jifercraft.bingo.config.Messages;
 import com.jifercraft.bingo.game.BingoCommand;
 import com.jifercraft.bingo.game.Game;
 import com.jifercraft.bingo.game.RoundListener;
+import com.jifercraft.bingo.game.SignManager;
 import com.jifercraft.bingo.game.Teams;
 import com.jifercraft.bingo.history.MatchHistory;
 import com.jifercraft.bingo.updater.UpdateChecker;
@@ -14,11 +17,16 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Collection;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Location;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BingoRush extends JavaPlugin {
@@ -62,6 +70,12 @@ public final class BingoRush extends JavaPlugin {
         }
         game.loadSavedRoundIfPresent();
         game.display().applyAll(teams.all());
+
+        SignManager signManager = new SignManager(this, game);
+        game.signManager(signManager);
+        getServer().getPluginManager().registerEvents(signManager, this);
+        signManager.updateAll();
+
         getServer().getPluginManager().registerEvents(new RoundListener(this, game), this);
         BingoCommand commands = new BingoCommand(this, game);
         for (String name : new String[]{"bingo", "card", "teams", "setup"}) {
@@ -70,6 +84,47 @@ public final class BingoRush extends JavaPlugin {
                 command.setExecutor(commands);
                 command.setTabCompleter(commands);
             }
+        }
+
+        getServer().getServicesManager().register(
+                BingoRushAPI.class,
+                new BingoRushAPI() {
+                    @Override
+                    public boolean isRoundRunning() {
+                        return game.round() != null;
+                    }
+
+                    @Override
+                    public Optional<com.jifercraft.bingo.game.Round> getActiveRound() {
+                        return Optional.ofNullable(game.round());
+                    }
+
+                    @Override
+                    public Optional<com.jifercraft.bingo.game.Team> getPlayerTeam(UUID playerId) {
+                        return Optional.ofNullable(game.teams().of(playerId));
+                    }
+
+                    @Override
+                    public boolean isPlayerInGame(UUID playerId) {
+                        return game.round() != null && game.teams().of(playerId) != null;
+                    }
+
+                    @Override
+                    public Collection<com.jifercraft.bingo.game.Team> getTeams() {
+                        return game.teams().all();
+                    }
+
+                    @Override
+                    public Location getLobbyLocation() {
+                        return bingoConfig != null ? bingoConfig.lobbyLocation() : null;
+                    }
+                },
+                this,
+                ServicePriority.Normal
+        );
+
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            new BingoRushExpansion(this, game).register();
         }
 
         updateChecker = new UpdateChecker(this);

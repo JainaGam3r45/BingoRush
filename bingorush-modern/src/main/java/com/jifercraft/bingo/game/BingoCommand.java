@@ -27,10 +27,10 @@ import org.bukkit.entity.Player;
  */
 public final class BingoCommand {
 
-    private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "spectate", "coords", "version");
+    private static final List<String> PLAYER_HELP = List.of("join", "teams", "card", "leave", "spectate", "coords", "lobby", "randomjoin", "version");
     private static final List<String> ADMIN_HELP = List.of(
             "card-spectator", "start", "setup", "stop", "pause", "resume", "reroll", "teams-admin",
-            "history", "export", "reload");
+            "setlobby", "history", "export", "reload");
 
     private final BingoRush plugin;
     private final Game game;
@@ -46,6 +46,18 @@ public final class BingoCommand {
                 .then(Commands.literal("help").executes(this::help))
                 .then(Commands.literal("ayuda").executes(this::help))
                 .then(Commands.literal("version").executes(this::version))
+                .then(Commands.literal("lobby")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::teleportToLobby)))
+                .then(Commands.literal("setlobby")
+                        .requires(this::isAdmin)
+                        .executes(ctx -> runForPlayer(ctx, game::setLobby)))
+                .then(Commands.literal("randomjoin")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::randomJoin)))
+                .then(Commands.literal("autojoin")
+                        .requires(this::isPlayerAllowed)
+                        .executes(ctx -> runForPlayer(ctx, game::randomJoin)))
                 .then(Commands.literal("join")
                         .requires(this::isPlayerAllowed)
                         .executes(ctx -> runForPlayer(ctx, player -> game.joinTeam(player, null)))

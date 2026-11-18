@@ -14,6 +14,7 @@ repositories {
             includeGroup("net.md-5")
         }
     }
+    maven("https://repo.extendedclip.com/releases/")
 }
 
 // Code that needs the 1.12 API (advancements). It is compiled on its own and
@@ -35,6 +36,7 @@ configurations.runtimeClasspath {
 dependencies {
     implementation(project(":bingorush-core"))
     compileOnly("org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT")
+    compileOnly("me.clip:placeholderapi:2.11.6")
     "v1_12CompileOnly"("org.spigotmc:spigot-api:1.12.2-R0.1-SNAPSHOT")
     "v1_12CompileOnly"(sourceSets.main.get().output)
 
