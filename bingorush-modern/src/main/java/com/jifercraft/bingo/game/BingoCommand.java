@@ -20,6 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -194,6 +196,17 @@ public final class BingoCommand {
                                         .executes(this::seasonPhase)))
                         .then(Commands.literal("reset").executes(this::seasonReset))
                         .then(Commands.literal("restore").executes(this::seasonRestore))
+                        .then(Commands.literal("gift")
+                                .then(Commands.literal("spawn").executes(this::seasonGiftSpawn))
+                                .then(Commands.literal("clear").executes(this::seasonGiftClear))
+                                .then(Commands.literal("add")
+                                        .then(Commands.argument("type", StringArgumentType.word())
+                                                .suggests(this::suggestGiftTypes)
+                                                .executes(ctx -> runForPlayer(ctx, player -> this.seasonGiftAdd(player, StringArgumentType.getString(ctx, "type"))))))
+                                .then(Commands.literal("reset")
+                                        .then(Commands.argument("target", StringArgumentType.word())
+                                                .suggests((c, b) -> suggestGiftResetTargets(b))
+                                                .executes(this::seasonGiftReset))))
                         .then(Commands.literal("test")
                                 .then(Commands.literal("snowfall").executes(ctx -> runForPlayer(ctx, this::testSnowfall)))
                                 .then(Commands.literal("claim").executes(ctx -> runForPlayer(ctx, this::testClaimFirework)))))
@@ -432,6 +445,96 @@ public final class BingoCommand {
         if (season != null) {
             season.onClaim(player);
         }
+    }
+
+    private int seasonGiftSpawn(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season == null) {
+            plugin.messages().send(sender, "season.disabled");
+            return Command.SINGLE_SUCCESS;
+        }
+        Location lobby = plugin.bingoConfig() != null ? plugin.bingoConfig().lobbyLocation() : null;
+        if (lobby == null) {
+            sender.sendMessage("No lobby configured to spawn gifts!");
+            return Command.SINGLE_SUCCESS;
+        }
+        int count = season.spawnGifts(lobby);
+        plugin.messages().send(sender, "season.gift-spawned", Placeholder.unparsed("count", String.valueOf(count)));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int seasonGiftClear(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season != null) {
+            season.clearGifts();
+            plugin.messages().send(sender, "season.gift-cleared");
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private void seasonGiftAdd(Player player, String type) {
+        Season season = plugin.season();
+        if (season == null) {
+            plugin.messages().send(player, "season.disabled");
+            return;
+        }
+        boolean ok = season.addGift(player.getLocation(), type);
+        if (ok) {
+            plugin.messages().send(player, "season.gift-added", Placeholder.unparsed("type", type));
+        } else {
+            player.sendMessage("Failed to add gift of type: " + type);
+        }
+    }
+
+    private int seasonGiftReset(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
+        Season season = plugin.season();
+        if (season == null) {
+            plugin.messages().send(sender, "season.disabled");
+            return Command.SINGLE_SUCCESS;
+        }
+        String target = StringArgumentType.getString(ctx, "target");
+        if ("all".equalsIgnoreCase(target)) {
+            season.claims().resetAll();
+            plugin.messages().send(sender, "season.gift-reset-all");
+        } else {
+            Player p = Bukkit.getPlayerExact(target);
+            if (p != null) {
+                season.claims().reset(p.getUniqueId());
+                plugin.messages().send(sender, "season.gift-reset-player", Placeholder.unparsed("player", p.getName()));
+            } else {
+                sender.sendMessage("Player not found: " + target);
+            }
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private CompletableFuture<Suggestions> suggestGiftTypes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        Season season = plugin.season();
+        if (season != null && season.settings().giftSettings() != null) {
+            String rem = builder.getRemainingLowerCase();
+            for (String key : season.settings().giftSettings().types().keySet()) {
+                if (key.toLowerCase(Locale.ROOT).startsWith(rem)) {
+                    builder.suggest(key);
+                }
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestGiftResetTargets(SuggestionsBuilder builder) {
+        String rem = builder.getRemainingLowerCase();
+        if ("all".startsWith(rem)) {
+            builder.suggest("all");
+        }
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.getName().toLowerCase(Locale.ROOT).startsWith(rem)) {
+                builder.suggest(p.getName());
+            }
+        }
+        return builder.buildFuture();
     }
 
     private CompletableFuture<Suggestions> suggestPhases(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {

@@ -152,6 +152,31 @@ public final class BingoRushExpansion extends PlaceholderExpansion {
             return String.valueOf(game.leadingScore());
         }
 
+        if (p.equals("season_active")) {
+            return (plugin.season() != null && plugin.season().currentPhase().isVisualsActive()) ? "true" : "false";
+        }
+        if (p.equals("season_phase")) {
+            return plugin.season() != null ? plugin.season().currentPhase().name() : "INACTIVE";
+        }
+        if (p.equals("season_time_left")) {
+            if (plugin.season() == null || !plugin.season().settings().enabled()) {
+                return "00h 00m 00s";
+            }
+            long remaining = plugin.season().settings().window().remainingMillisInPhase(plugin.season().clock().currentTimeMillis());
+            long remSeconds = Math.max(0, remaining / 1000L);
+            return String.format(Locale.ROOT, "%02dh %02dm %02ds",
+                    remSeconds / 3600, (remSeconds % 3600) / 60, remSeconds % 60);
+        }
+        if (p.equals("season_gifts_total")) {
+            return plugin.season() != null ? String.valueOf(plugin.season().activeGifts().size()) : "0";
+        }
+        if (p.equals("season_gifts_found")) {
+            if (uuid != null && plugin.season() != null) {
+                return String.valueOf(plugin.season().claims().claimedCount(uuid));
+            }
+            return "0";
+        }
+
         return null;
     }
 }

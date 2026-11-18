@@ -323,4 +323,12 @@ season:
   simulated: "<prefix><body>Simulated season phase set to <hl><phase></hl>."
   restored: "<prefix><body>Restored <hl><count></hl> <body>blocks from the season journal."
   no-blocks: "<prefix><muted>No recorded season blocks to restore.</muted>"
+  gift-found: "<prefix><body>You found a <gift_name><body>! <muted>(<found>/<total>)</muted>"
+  gift-already-claimed: "<prefix><err>You have already found this gift! <muted>(<found>/<total>)</muted></err>"
+  gift-all-found: "<prefix><hl>Congratulations! You have found all <total> seasonal gifts!</hl>"
+  gift-spawned: "<prefix><body>Spawned <hl><count></hl> <body>seasonal gifts in the lobby."
+  gift-cleared: "<prefix><body>Cleared all active seasonal gifts."
+  gift-reset-player: "<prefix><body>Reset gift claims for <hl><player></hl>."
+  gift-reset-all: "<prefix><body>Reset all seasonal gift claims."
+  gift-added: "<prefix><body>Added a <hl><type></hl> <body>gift at your location."
 

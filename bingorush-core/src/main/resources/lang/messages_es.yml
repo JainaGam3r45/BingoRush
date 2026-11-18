@@ -319,4 +319,12 @@ season:
   simulated: "<prefix><body>Fase de temporada simulada establecida a <hl><phase></hl>."
   restored: "<prefix><body>Se restauraron <hl><count></hl> <body>bloques del registro de temporada."
   no-blocks: "<prefix><muted>No hay bloques registrados de temporada para restaurar.</muted>"
+  gift-found: "<prefix><body>¡Has encontrado un <gift_name><body>! <muted>(<found>/<total>)</muted>"
+  gift-already-claimed: "<prefix><err>¡Ya has encontrado este regalo! <muted>(<found>/<total>)</muted></err>"
+  gift-all-found: "<prefix><hl>¡Felicidades! ¡Has encontrado todos los <total> regalos de la temporada!</hl>"
+  gift-spawned: "<prefix><body>Se generaron <hl><count></hl> <body>regalos de temporada en el lobby."
+  gift-cleared: "<prefix><body>Se eliminaron todos los regalos de temporada activos."
+  gift-reset-player: "<prefix><body>Progreso de regalos reiniciado para <hl><player></hl>."
+  gift-reset-all: "<prefix><body>Se reinició el progreso de regalos para todos los jugadores."
+  gift-added: "<prefix><body>Se añadió un regalo <hl><type></hl> <body>en tu ubicación."
 

@@ -279,4 +279,49 @@ season:
   lobby-snow: false
   # Radius in blocks around lobby spawn for seasonal visual changes (0 disables).
   lobby-radius: 25
+  # Seasonal gift hunt in lobbies ("The Search" style hidden presents).
+  gifts:
+    enabled: true
+    # Automatically spawn gifts around the lobby location when the season is active.
+    auto-spawn: true
+    # Number of gifts to spawn automatically if no fixed locations are defined.
+    auto-spawn-count: 5
+    # Detection radius in blocks for particle and sound proximity cues.
+    proximity-radius: 8.0
+    # Different types of gifts with custom skull textures, particles, sounds and rewards.
+    types:
+      red_gift:
+        name: "<red>Red Gift</red>"
+        texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmNlMDRjMTZhNjk1ZmYxMTk2NDFmNDdiZjYyOGE1NTYzOWZmMzIyOWIzNWZhNTJlNDI4Y2RiMWE2ZDk2MjA1ZSJ9fX0="
+        particle: "VILLAGER_HAPPY"
+        proximity-sound: "block.note_block.chime"
+        click-sound: "entity.player.levelup"
+        click-particle: "FIREWORK"
+        rewards:
+          - "give %player% cookie 5"
+          - "xp add %player% 20"
+      green_gift:
+        name: "<green>Green Gift</green>"
+        texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzg2MTg1NWFiODc5ZTUyNzg2OWNlNzY0MTVlOTY1MjkxNmZjOGRhY2IyZTFkYzQ2MTNlMTg3MDE1NzhjNjkifX19"
+        particle: "VILLAGER_HAPPY"
+        proximity-sound: "block.note_block.chime"
+        click-sound: "entity.player.levelup"
+        click-particle: "FIREWORK"
+        rewards:
+          - "give %player% pumpkin_pie 3"
+          - "xp add %player% 25"
+      golden_gift:
+        name: "<yellow>Golden Gift</yellow>"
+        texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMmI1NmZhMmViNWVjOWRhY2Y0YjMzNWY5OWI4MTZhN2NkNTg0ZGE0OWQzZDFkYmExOWU4OTU1OTlmYjliIn19fQ=="
+        particle: "VILLAGER_HAPPY"
+        proximity-sound: "block.note_block.chime"
+        click-sound: "entity.player.levelup"
+        click-particle: "FIREWORK"
+        rewards:
+          - "give %player% golden_apple 1"
+          - "xp add %player% 50"
+    # Bonus rewards executed when a player finds all seasonal gifts.
+    completion-rewards:
+      - "give %player% diamond 3"
+      - "xp add %player% 100"
 

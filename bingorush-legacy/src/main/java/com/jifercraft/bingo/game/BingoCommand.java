@@ -13,6 +13,7 @@ import java.util.Locale;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -215,6 +216,47 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                     messages().send(sender, "season.no-blocks");
                 }
                 break;
+            case "gift":
+                if (args.length > 2) {
+                    String action = args[2].toLowerCase(Locale.ROOT);
+                    if (action.equals("spawn")) {
+                        Location lobby = plugin.bingoConfig() != null ? plugin.bingoConfig().lobbyLocation() : null;
+                        if (lobby != null) {
+                            int spawned = season.spawnGifts(lobby);
+                            messages().send(sender, "season.gift-spawned", Placeholder.unparsed("count", String.valueOf(spawned)));
+                        } else {
+                            sender.sendMessage("No lobby configured to spawn gifts!");
+                        }
+                    } else if (action.equals("clear")) {
+                        season.clearGifts();
+                        messages().send(sender, "season.gift-cleared");
+                    } else if (action.equals("add") && sender instanceof Player && args.length > 3) {
+                        Player p = (Player) sender;
+                        String type = args[3];
+                        if (season.addGift(p.getLocation(), type)) {
+                            messages().send(p, "season.gift-added", Placeholder.unparsed("type", type));
+                        } else {
+                            p.sendMessage("Failed to add gift of type: " + type);
+                        }
+                    } else if (action.equals("reset") && args.length > 3) {
+                        String target = args[3];
+                        if (target.equalsIgnoreCase("all")) {
+                            season.claims().resetAll();
+                            messages().send(sender, "season.gift-reset-all");
+                        } else {
+                            Player p = Bukkit.getPlayerExact(target);
+                            if (p != null) {
+                                season.claims().reset(p.getUniqueId());
+                                messages().send(sender, "season.gift-reset-player", Placeholder.unparsed("player", p.getName()));
+                            } else {
+                                sender.sendMessage("Player not found: " + target);
+                            }
+                        }
+                    }
+                } else {
+                    sender.sendMessage("Usage: /bingo season gift [spawn|clear|add <type>|reset <player|all>]");
+                }
+                break;
             case "test":
                 if (sender instanceof Player && args.length > 2) {
                     Player p = (Player) sender;
@@ -226,7 +268,7 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                 }
                 break;
             default:
-                sender.sendMessage("Usage: /bingo season [status|phase|reset|restore|test]");
+                sender.sendMessage("Usage: /bingo season [status|phase|reset|restore|gift|test]");
                 break;
         }
     }
@@ -384,7 +426,7 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
                     }
                     return matching(ids, args[1]);
                 case "season":
-                    return admin ? matching(Arrays.asList("status", "phase", "reset", "restore", "test"), args[1])
+                    return admin ? matching(Arrays.asList("status", "phase", "reset", "restore", "gift", "test"), args[1])
                             : Collections.<String>emptyList();
                 default:
                     return Collections.emptyList();
@@ -392,6 +434,22 @@ public final class BingoCommand implements CommandExecutor, TabCompleter {
         }
         if (admin && sub.equals("season") && args.length == 3 && args[1].equalsIgnoreCase("phase")) {
             return matching(Arrays.asList("inactive", "pre_season", "active", "wrap_up"), args[2]);
+        }
+        if (admin && sub.equals("season") && args.length == 3 && args[1].equalsIgnoreCase("gift")) {
+            return matching(Arrays.asList("spawn", "clear", "add", "reset"), args[2]);
+        }
+        if (admin && sub.equals("season") && args.length == 4 && args[1].equalsIgnoreCase("gift") && args[2].equalsIgnoreCase("add")) {
+            if (plugin.season() != null && plugin.season().settings().giftSettings() != null) {
+                return matching(new ArrayList<>(plugin.season().settings().giftSettings().types().keySet()), args[3]);
+            }
+        }
+        if (admin && sub.equals("season") && args.length == 4 && args[1].equalsIgnoreCase("gift") && args[2].equalsIgnoreCase("reset")) {
+            List<String> targets = new ArrayList<>();
+            targets.add("all");
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                targets.add(player.getName());
+            }
+            return matching(targets, args[3]);
         }
         if (admin && sub.equals("season") && args.length == 3 && args[1].equalsIgnoreCase("test")) {
             return matching(Arrays.asList("snowfall", "claim"), args[2]);

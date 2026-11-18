@@ -1,11 +1,18 @@
 package com.jifercraft.bingo.season;
 
+import com.cryptomorin.xseries.XBlock;
 import com.cryptomorin.xseries.XMaterial;
 import com.cryptomorin.xseries.XSound;
 import com.jifercraft.bingo.BingoRush;
-import com.jifercraft.bingo.compat.ServerVersion;
 import java.io.File;
+import org.bukkit.Sound;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.Effect;
@@ -16,6 +23,8 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -29,15 +38,23 @@ public final class Season implements Listener {
     private final SeasonSettings settings;
     private final File journalFile;
     private final BlockJournal journal;
+    private final File claimsFile;
+    private final GiftClaims claims;
+    private final Map<String, GiftLocation> activeGifts = new ConcurrentHashMap<>();
+    private final Random random = new Random();
+
     private SeasonClock clock;
     private SeasonPhase currentPhase;
     private BukkitTask tickerTask;
+    private BukkitTask proximityTask;
 
     public Season(BingoRush plugin, SeasonSettings settings) {
         this.plugin = plugin;
         this.settings = settings;
         this.journalFile = new File(plugin.getDataFolder(), "data/season/blocks.json");
         this.journal = BlockJournal.load(journalFile, plugin.getLogger());
+        this.claimsFile = new File(plugin.getDataFolder(), "data/season/gift_claims.json");
+        this.claims = GiftClaims.load(claimsFile, plugin.getLogger());
         this.clock = SeasonClock.system();
         this.currentPhase = settings.enabled()
                 ? settings.window().phaseAt(clock.currentTimeMillis())
@@ -49,6 +66,19 @@ public final class Season implements Listener {
             return;
         }
         tickerTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 1200L);
+        proximityTask = Bukkit.getScheduler().runTaskTimer(plugin, this::proximityTick, 40L, 20L);
+
+        if (currentPhase.isVisualsActive()) {
+            Location lobby = plugin.bingoConfig() != null ? plugin.bingoConfig().lobbyLocation() : null;
+            if (lobby != null) {
+                if (settings.lobbySnow()) {
+                    applyLobbySnow(lobby);
+                }
+                if (currentPhase == SeasonPhase.ACTIVE && settings.giftSettings().enabled()) {
+                    spawnGifts(lobby);
+                }
+            }
+        }
     }
 
     public void stop() {
@@ -56,9 +86,14 @@ public final class Season implements Listener {
             tickerTask.cancel();
             tickerTask = null;
         }
+        if (proximityTask != null) {
+            proximityTask.cancel();
+            proximityTask = null;
+        }
         if (!journal.isEmpty()) {
             journal.save(journalFile);
         }
+        claims.save(claimsFile);
     }
 
     public void tick() {
@@ -76,23 +111,287 @@ public final class Season implements Listener {
         SeasonPhase oldPhase = this.currentPhase;
         this.currentPhase = newPhase;
 
+        Location lobby = plugin.bingoConfig() != null ? plugin.bingoConfig().lobbyLocation() : null;
+
         switch (newPhase) {
             case PRE_SEASON:
+                if (settings.lobbySnow() && lobby != null) {
+                    applyLobbySnow(lobby);
+                }
                 plugin.messages().broadcast("season.pre-season-chat",
                         Placeholder.unparsed("date", SeasonWindow.formatUtc(settings.window().activeStartMillis())));
                 break;
             case ACTIVE:
+                if (settings.lobbySnow() && lobby != null) {
+                    applyLobbySnow(lobby);
+                }
+                if (settings.giftSettings().enabled() && lobby != null) {
+                    spawnGifts(lobby);
+                }
                 plugin.messages().broadcast("season.active-chat");
                 break;
             case WRAP_UP:
+                clearGifts();
                 plugin.messages().broadcast("season.wrap-up-chat");
                 break;
             case INACTIVE:
+                clearGifts();
                 if (oldPhase.isVisualsActive()) {
                     restoreBlocks();
                     plugin.messages().broadcast("season.ended-chat");
                 }
                 break;
+        }
+    }
+
+    /**
+     * Gently layers snow on top of non-container solid floor blocks around the lobby.
+     */
+    public int applyLobbySnow(Location lobby) {
+        if (lobby == null || lobby.getWorld() == null || settings.lobbyRadius() <= 0) {
+            return 0;
+        }
+        World world = lobby.getWorld();
+        int cx = lobby.getBlockX();
+        int cz = lobby.getBlockZ();
+        int r = settings.lobbyRadius();
+        int placed = 0;
+
+        for (int dx = -r; dx <= r; dx += 2) {
+            for (int dz = -r; dz <= r; dz += 2) {
+                if (dx * dx + dz * dz > r * r) {
+                    continue;
+                }
+                int x = cx + dx;
+                int z = cz + dz;
+                int y = world.getHighestBlockYAt(x, z);
+                Block floor = world.getBlockAt(x, y - 1, z);
+                Block target = world.getBlockAt(x, y, z);
+
+                if (target.getType() == Material.AIR && floor.getType().isSolid()
+                        && !(floor.getState() instanceof InventoryHolder)) {
+                    if (!journal.isTracked(world.getName(), x, y, z)) {
+                        journal.record(new BlockJournalEntry(world.getName(), x, y, z,
+                                "AIR:0", "season_snow", clock.currentTimeMillis()));
+                    }
+                    XBlock.setType(target, XMaterial.SNOW);
+                    placed++;
+                }
+            }
+        }
+        if (placed > 0) {
+            journal.save(journalFile);
+        }
+        return placed;
+    }
+
+    /**
+     * Spawns seasonal gifts around the lobby.
+     */
+    public int spawnGifts(Location lobby) {
+        if (!settings.giftSettings().enabled() || lobby == null || lobby.getWorld() == null) {
+            return 0;
+        }
+        World world = lobby.getWorld();
+        GiftSettings giftSettings = settings.giftSettings();
+        Map<String, GiftType> types = giftSettings.types();
+        if (types.isEmpty()) {
+            return 0;
+        }
+        List<GiftType> typeList = new ArrayList<>(types.values());
+
+        clearGifts();
+
+        int targetCount = giftSettings.autoSpawnCount();
+        int cx = lobby.getBlockX();
+        int cz = lobby.getBlockZ();
+        int r = Math.max(10, settings.lobbyRadius());
+        int spawned = 0;
+
+        for (int attempts = 0; attempts < 100 && spawned < targetCount; attempts++) {
+            int dx = random.nextInt(r * 2 + 1) - r;
+            int dz = random.nextInt(r * 2 + 1) - r;
+            if (dx * dx + dz * dz > r * r || (Math.abs(dx) < 3 && Math.abs(dz) < 3)) {
+                continue;
+            }
+            int x = cx + dx;
+            int z = cz + dz;
+            int y = world.getHighestBlockYAt(x, z);
+            Block floor = world.getBlockAt(x, y - 1, z);
+            Block target = world.getBlockAt(x, y, z);
+            Block ceiling = world.getBlockAt(x, y + 1, z);
+
+            if (target.getType() == Material.AIR && ceiling.getType() == Material.AIR
+                    && floor.getType().isSolid() && !(floor.getState() instanceof InventoryHolder)) {
+                String coordKey = world.getName() + ":" + x + "," + y + "," + z;
+                if (activeGifts.containsKey(coordKey)) {
+                    continue;
+                }
+                GiftType type = typeList.get(random.nextInt(typeList.size()));
+                GiftLocation giftLoc = new GiftLocation("gift_" + (spawned + 1), type.id(), world.getName(), x, y, z);
+
+                if (!journal.isTracked(world.getName(), x, y, z)) {
+                    journal.record(new BlockJournalEntry(world.getName(), x, y, z,
+                            "AIR:0", "season_gift:" + type.id(), clock.currentTimeMillis()));
+                }
+                CustomSkull.setSkull(target, type.texture());
+                activeGifts.put(coordKey, giftLoc);
+                spawned++;
+            }
+        }
+        if (spawned > 0) {
+            journal.save(journalFile);
+        }
+        return spawned;
+    }
+
+    public void clearGifts() {
+        for (GiftLocation loc : activeGifts.values()) {
+            World world = Bukkit.getWorld(loc.world());
+            if (world != null && world.isChunkLoaded(loc.x() >> 4, loc.z() >> 4)) {
+                Block block = world.getBlockAt(loc.x(), loc.y(), loc.z());
+                if (XBlock.isSimilar(block, XMaterial.PLAYER_HEAD)) {
+                    block.setType(Material.AIR);
+                }
+            }
+        }
+        activeGifts.clear();
+    }
+
+    public boolean addGift(Location loc, String typeId) {
+        if (loc == null || loc.getWorld() == null || typeId == null) {
+            return false;
+        }
+        GiftType type = settings.giftSettings().types().get(typeId);
+        if (type == null) {
+            return false;
+        }
+        Block block = loc.getBlock();
+        if (block.getState() instanceof InventoryHolder) {
+            return false;
+        }
+        String worldName = block.getWorld().getName();
+        int x = block.getX();
+        int y = block.getY();
+        int z = block.getZ();
+        String coordKey = worldName + ":" + x + "," + y + "," + z;
+
+        if (!journal.isTracked(worldName, x, y, z)) {
+            @SuppressWarnings("deprecation")
+            String data = block.getType().name() + ":" + block.getData();
+            journal.record(new BlockJournalEntry(worldName, x, y, z,
+                    data, "season_gift:" + type.id(), clock.currentTimeMillis()));
+            journal.save(journalFile);
+        }
+        CustomSkull.setSkull(block, type.texture());
+        activeGifts.put(coordKey, new GiftLocation("custom_" + activeGifts.size(), type.id(), worldName, x, y, z));
+        return true;
+    }
+
+    public void proximityTick() {
+        if (!currentPhase.isVisualsActive() || !settings.giftSettings().enabled() || activeGifts.isEmpty()) {
+            return;
+        }
+        double radius = settings.giftSettings().proximityRadius();
+
+        for (GiftLocation loc : activeGifts.values()) {
+            World world = Bukkit.getWorld(loc.world());
+            if (world == null || !world.isChunkLoaded(loc.x() >> 4, loc.z() >> 4)) {
+                continue;
+            }
+            Location center = new Location(world, loc.x() + 0.5, loc.y() + 0.5, loc.z() + 0.5);
+            GiftType type = settings.giftSettings().types().get(loc.typeId());
+            if (type == null) {
+                continue;
+            }
+
+            try {
+                world.playEffect(center.clone().add(0, 0.2, 0), Effect.valueOf("HAPPY_VILLAGER"), 0);
+            } catch (IllegalArgumentException ignored) {
+            }
+
+            for (Player player : world.getPlayers()) {
+                if (claims.hasClaimed(player.getUniqueId(), loc.id())) {
+                    continue;
+                }
+                double dist = player.getLocation().distance(center);
+                if (dist <= radius) {
+                    float factor = (float) (1.0 - (dist / radius));
+                    float pitch = 0.6f + factor * 0.9f;
+                    float volume = 0.3f + factor * 0.5f;
+                    Sound s = XSound.BLOCK_NOTE_BLOCK_CHIME.parseSound();
+                    if (s != null) {
+                        player.playSound(center, s, volume, pitch);
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) {
+            return;
+        }
+        Block clicked = event.getClickedBlock();
+        String coordKey = clicked.getWorld().getName() + ":" + clicked.getX() + "," + clicked.getY() + "," + clicked.getZ();
+        GiftLocation giftLoc = activeGifts.get(coordKey);
+        if (giftLoc == null) {
+            return;
+        }
+
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+        GiftType type = settings.giftSettings().types().get(giftLoc.typeId());
+        String giftName = type != null ? type.displayName() : "Gift";
+        int total = activeGifts.size();
+
+        if (claims.hasClaimed(uuid, giftLoc.id())) {
+            plugin.messages().send(player, "season.gift-already-claimed",
+                    Placeholder.unparsed("found", String.valueOf(claims.claimedCount(uuid))),
+                    Placeholder.unparsed("total", String.valueOf(total)));
+            Sound s = XSound.BLOCK_NOTE_BLOCK_BASS.parseSound();
+            if (s != null) {
+                player.playSound(clicked.getLocation(), s, 0.6f, 0.8f);
+            }
+            return;
+        }
+
+        claims.recordClaim(uuid, giftLoc.id());
+        claims.save(claimsFile);
+        int found = claims.claimedCount(uuid);
+
+        Location center = clicked.getLocation().add(0.5, 0.6, 0.5);
+        try {
+            clicked.getWorld().playEffect(center, Effect.valueOf("FIREWORKS_SPARK"), 0);
+            clicked.getWorld().playEffect(center, Effect.valueOf("HAPPY_VILLAGER"), 0);
+        } catch (IllegalArgumentException ignored) {
+        }
+        Sound levelSound = XSound.ENTITY_PLAYER_LEVELUP.parseSound();
+        if (levelSound != null) {
+            player.playSound(center, levelSound, 1.0f, 1.2f);
+        }
+
+        if (type != null) {
+            for (String cmd : type.rewardCommands()) {
+                String formatted = cmd.replace("%player%", player.getName());
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formatted);
+            }
+        }
+
+        plugin.messages().send(player, "season.gift-found",
+                Placeholder.parsed("gift_name", giftName),
+                Placeholder.unparsed("found", String.valueOf(found)),
+                Placeholder.unparsed("total", String.valueOf(total)));
+
+        if (found >= total && total > 0) {
+            plugin.messages().send(player, "season.gift-all-found",
+                    Placeholder.unparsed("total", String.valueOf(total)));
+            for (String cmd : settings.giftSettings().completionCommands()) {
+                String formatted = cmd.replace("%player%", player.getName());
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formatted);
+            }
         }
     }
 
@@ -110,7 +409,10 @@ public final class Season implements Listener {
         Location loc = player.getLocation().clone().add(0, 3.0, 0);
         World world = loc.getWorld();
         if (world != null) {
-            playParticleSafe(loc, "FIREWORKS_SPARK", 16);
+            try {
+                world.playEffect(loc, Effect.valueOf("FIREWORKS_SPARK"), 0);
+            } catch (IllegalArgumentException ignored) {
+            }
             XSound.ENTITY_FIREWORK_ROCKET_BLAST.play(loc, 0.7f, 1.2f);
         }
     }
@@ -121,48 +423,14 @@ public final class Season implements Listener {
         }
         World world = center.getWorld();
         if (world != null) {
-            playParticleSafe(center.clone().add(0, 4.0, 0), "SNOW_SHOVEL", 30);
+            try {
+                world.playEffect(center.clone().add(0, 4.0, 0), Effect.valueOf("SNOW_SHOVEL"), 0);
+            } catch (IllegalArgumentException ignored) {
+            }
             XSound.BLOCK_NOTE_BLOCK_CHIME.play(center, 0.5f, 1.4f);
         }
     }
 
-    @SuppressWarnings("deprecation")
-    private void playParticleSafe(Location loc, String effectName, int count) {
-        World world = loc.getWorld();
-        if (world == null) {
-            return;
-        }
-        try {
-            Effect effect = Effect.valueOf(effectName);
-            for (int i = 0; i < Math.min(count, 5); i++) {
-                world.playEffect(loc, effect, 0);
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    public boolean modifyBlock(Block block, Material newMaterial, String tag) {
-        if (block == null || block.getState() instanceof InventoryHolder) {
-            return false;
-        }
-        String worldName = block.getWorld().getName();
-        int x = block.getX();
-        int y = block.getY();
-        int z = block.getZ();
-
-        if (!journal.isTracked(worldName, x, y, z)) {
-            String serialized = block.getType().name() + ":" + block.getData();
-            BlockJournalEntry entry = new BlockJournalEntry(
-                    worldName, x, y, z, serialized, tag, clock.currentTimeMillis());
-            journal.record(entry);
-        }
-
-        block.setType(newMaterial, false);
-        return true;
-    }
-
-    @SuppressWarnings("deprecation")
     public int restoreBlocks() {
         if (journal.isEmpty()) {
             return 0;
@@ -179,12 +447,14 @@ public final class Season implements Listener {
                 continue;
             }
             try {
-                String[] parts = entry.blockData().split(":");
+                String raw = entry.blockData();
+                String[] parts = raw.split(":");
                 Material mat = Material.matchMaterial(parts[0]);
                 byte data = parts.length > 1 ? Byte.parseByte(parts[1]) : 0;
                 if (mat != null) {
-                    block.setTypeIdAndData(mat.getId(), data, false);
-                    count++;
+                    @SuppressWarnings("deprecation")
+                    boolean ok = block.setTypeIdAndData(mat.getId(), data, false);
+                    if (ok) count++;
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to restore block at " + entry.coordinateKey() + ": " + e.getMessage());
@@ -192,6 +462,7 @@ public final class Season implements Listener {
         }
         journal.clear();
         BlockJournal.delete(journalFile);
+        activeGifts.clear();
         return count;
     }
 
@@ -235,5 +506,13 @@ public final class Season implements Listener {
 
     public SeasonClock clock() {
         return clock;
+    }
+
+    public GiftClaims claims() {
+        return claims;
+    }
+
+    public Map<String, GiftLocation> activeGifts() {
+        return Collections.unmodifiableMap(activeGifts);
     }
 }

@@ -7,6 +7,8 @@ import com.jifercraft.bingo.card.ItemTier;
 import com.jifercraft.bingo.card.WinMode;
 import com.jifercraft.bingo.compat.ServerVersion;
 import com.jifercraft.bingo.game.BingoGameMode;
+import com.jifercraft.bingo.season.GiftSettings;
+import com.jifercraft.bingo.season.GiftType;
 import com.jifercraft.bingo.season.SeasonSettings;
 import com.jifercraft.bingo.season.SeasonWindow;
 import java.util.ArrayList;
@@ -14,6 +16,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -423,12 +426,37 @@ public final class BingoConfig {
         if (lobbyRadius < 0) {
             problems.add("season.lobby-radius is " + lobbyRadius + ", use 0 or greater");
         }
+
+        boolean giftsEnabled = yaml.getBoolean("season.gifts.enabled", true);
+        boolean giftsAutoSpawn = yaml.getBoolean("season.gifts.auto-spawn", true);
+        int giftsCount = yaml.getInt("season.gifts.auto-spawn-count", 5);
+        double proximityRadius = yaml.getDouble("season.gifts.proximity-radius", 8.0);
+        List<String> completionRewards = yaml.getStringList("season.gifts.completion-rewards");
+        Map<String, GiftType> giftTypes = new LinkedHashMap<>();
+        ConfigurationSection typesSec = yaml.getConfigurationSection("season.gifts.types");
+        if (typesSec != null) {
+            for (String key : typesSec.getKeys(false)) {
+                ConfigurationSection sec = typesSec.getConfigurationSection(key);
+                if (sec != null) {
+                    String name = sec.getString("name", key);
+                    String texture = sec.getString("texture", "");
+                    String particle = sec.getString("particle", "VILLAGER_HAPPY");
+                    String proxSound = sec.getString("proximity-sound", "block.note_block.chime");
+                    String clickSound = sec.getString("click-sound", "entity.player.levelup");
+                    String clickParticle = sec.getString("click-particle", "FIREWORK");
+                    List<String> rewards = sec.getStringList("rewards");
+                    giftTypes.put(key, new GiftType(key, name, texture, particle, proxSound, clickSound, clickParticle, rewards));
+                }
+            }
+        }
+        GiftSettings giftSettings = new GiftSettings(giftsEnabled, giftsAutoSpawn, giftsCount, proximityRadius, giftTypes, Collections.emptyList(), completionRewards);
+
         try {
             SeasonWindow window = SeasonWindow.parse(preStart, actStart, actEnd, wrapEnd);
-            seasonSettings = new SeasonSettings(seasonEnabled, window, snowfall, claimFirework, lobbySnow, lobbyRadius);
+            seasonSettings = new SeasonSettings(seasonEnabled, window, snowfall, claimFirework, lobbySnow, lobbyRadius, giftSettings);
         } catch (IllegalArgumentException e) {
             problems.add("season configuration error: " + e.getMessage());
-            seasonSettings = new SeasonSettings(false, new SeasonWindow(0, 0, 0, 0), false, false, false, 0);
+            seasonSettings = new SeasonSettings(false, new SeasonWindow(0, 0, 0, 0), false, false, false, 0, GiftSettings.disabled());
         }
 
         if (!problems.isEmpty()) {
