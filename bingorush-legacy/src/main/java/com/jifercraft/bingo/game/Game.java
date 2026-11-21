@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -165,6 +166,13 @@ public final class Game {
         return mapId != null && current != null && current.equalsIgnoreCase(mapId);
     }
 
+    public boolean isCurrentArena(String mapId) {
+        if (mapId == null) {
+            return false;
+        }
+        return round != null ? mapId.equalsIgnoreCase(roundArenaId) : isMapSelected(mapId);
+    }
+
     /** The arena the round in progress follows, or null. */
     public String roundArenaId() {
         return round == null ? null : roundArenaId;
@@ -196,15 +204,39 @@ public final class Game {
     }
 
     private boolean hasWaitingPlayers() {
+        return !waitingPlayers().isEmpty();
+    }
+
+    public List<UUID> waitingPlayers() {
         if (round != null) {
-            return false;
+            return Collections.emptyList();
         }
+        List<UUID> waiting = new ArrayList<UUID>();
         for (UUID id : savedInventories.keySet()) {
             if (Bukkit.getPlayer(id) != null) {
-                return true;
+                waiting.add(id);
             }
         }
-        return false;
+        return waiting;
+    }
+
+    /**
+     * Number of players currently in or waiting for this arena. During a
+     * match, counts the playing members; in the lobby, counts all players
+     * waiting in the room, with or without a picked team.
+     */
+    public int arenaPlayerCount(String mapId) {
+        if (!isCurrentArena(mapId)) {
+            return 0;
+        }
+        if (round != null) {
+            return teams.totalMembers();
+        }
+        Set<UUID> players = new HashSet<UUID>(waitingPlayers());
+        for (Team team : teams.all()) {
+            players.addAll(team.members());
+        }
+        return players.size();
     }
 
     public boolean isLobbyVoteItem(ItemStack stack) {
@@ -258,6 +290,12 @@ public final class Game {
         }
         player.setGameMode(GameMode.ADVENTURE);
         giveLobbyWaitingItems(player);
+        if (signManager != null) {
+            signManager.updateAll();
+        }
+        if (arena != null && round == null && arenaPlayerCount(arena.id()) >= arena.maxPlayers()) {
+            startRound(Bukkit.getConsoleSender(), null, null, null);
+        }
     }
 
     public void leaveWaitingLobby(Player player) {
@@ -568,6 +606,7 @@ public final class Game {
             messages().send(caller, "round-already-running");
             return;
         }
+        autoAssignWaitingPlayers();
         long activeTeams = teams.all().stream().filter(t -> !t.members().isEmpty()).count();
         if (activeTeams < 2) {
             messages().send(caller, "round-need-more-teams");
@@ -643,6 +682,44 @@ public final class Game {
             countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCountdown, 20, 20);
         } else {
             beginRun();
+        }
+    }
+
+    private void autoAssignWaitingPlayers() {
+        BingoConfig config = plugin.bingoConfig();
+        int maxPerTeam = cap(config);
+
+        List<Player> unassigned = new ArrayList<Player>();
+        for (UUID id : waitingPlayers()) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && player.isOnline() && teams.of(id) == null) {
+                unassigned.add(player);
+            }
+        }
+
+        for (Player player : unassigned) {
+            // A single team can never start a round, so the first two players split up.
+            Team target = teams.all().size() < 2 ? null : teams.withRoom(maxPerTeam);
+            if (target == null) {
+                int count = teams.all().size() + 1;
+                String name = messages().plainText("team-auto-name",
+                        Placeholder.unparsed("count", String.valueOf(count)));
+                while (teams.byName(name) != null) {
+                    name = messages().plainText("team-auto-name",
+                            Placeholder.unparsed("count", String.valueOf(++count)));
+                }
+                target = teams.createAuto(name, teams.all().size());
+            }
+            target.add(player.getUniqueId());
+            display.apply(player, target);
+            messages().send(player, "team-joined", teamPlaceholder(target));
+        }
+        if (!unassigned.isEmpty()) {
+            teamMenu.refreshAll();
+            display.applyAll(teams.all());
+            if (signManager != null) {
+                signManager.updateAll();
+            }
         }
     }
 
@@ -1288,6 +1365,9 @@ public final class Game {
                 }
             }
         }
+        if (signManager != null) {
+            signManager.updateAll();
+        }
     }
 
     /** True when the stack is the physical card item. */
@@ -1497,6 +1577,9 @@ public final class Game {
         pendingRestores.close();
         round = null;
         roundConfig = null;
+        if (signManager != null) {
+            signManager.stopTask();
+        }
     }
 
     /** After /bingo reload: names, order and chat format follow the new settings. */
@@ -1545,6 +1628,9 @@ public final class Game {
         cardNotice.remove(playerId);
         display.forget(playerId);
         hud.playerQuit(playerId);
+        if (signManager != null) {
+            signManager.updateAll();
+        }
     }
 
     /** A player closed one of our menus; stop tracking it everywhere. */

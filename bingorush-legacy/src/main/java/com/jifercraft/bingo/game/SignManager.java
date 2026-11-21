@@ -27,6 +27,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.scheduler.BukkitTask;
 
 /**
  * Interactive signs that display round status and let players join games.
@@ -37,12 +38,33 @@ public final class SignManager implements Listener {
     private final Game game;
     private final File storageFile;
     private final List<SignStorage.SavedSign> signs = new ArrayList<SignStorage.SavedSign>();
+    private BukkitTask updateTask;
 
     public SignManager(BingoRush plugin, Game game) {
         this.plugin = plugin;
         this.game = game;
         this.storageFile = new File(plugin.getDataFolder(), "data/signs.json");
         this.signs.addAll(SignStorage.load(storageFile));
+        startTask();
+    }
+
+    public void startTask() {
+        if (updateTask != null) {
+            return;
+        }
+        updateTask = Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+            @Override
+            public void run() {
+                updateAll();
+            }
+        }, 20L, 20L);
+    }
+
+    public void stopTask() {
+        if (updateTask != null) {
+            updateTask.cancel();
+            updateTask = null;
+        }
     }
 
     public void updateAll() {
@@ -70,9 +92,9 @@ public final class SignManager implements Listener {
         sign.setLine(0, plugin.messages().legacy(plugin.messages().render("brand")));
         sign.setLine(1, mapName);
         Round round = game.round();
-        boolean isCurrentMap = game.isMapSelected(mapId);
+        boolean isCurrent = game.isCurrentArena(mapId);
         String statusKey = "sign-status-waiting";
-        if (round != null && isCurrentMap) {
+        if (round != null && isCurrent) {
             if (round.state() == Round.State.COUNTDOWN) {
                 statusKey = "sign-status-starting";
             } else if (round.state() == Round.State.PAUSED) {
@@ -82,20 +104,20 @@ public final class SignManager implements Listener {
             }
         }
         sign.setLine(2, plugin.messages().legacy(plugin.messages().render(statusKey)));
-        int current = isCurrentMap ? game.teams().totalMembers() : 0;
+        int current = game.arenaPlayerCount(mapId);
         int max = map != null ? map.maxPlayers() : (game.teams().all().size() * game.teamSizeCap());
         sign.setLine(3, current + "/" + max);
         sign.update(true, false);
-        updateAttachedBlock(sign, round, isCurrentMap);
+        updateAttachedBlock(sign, round, isCurrent);
     }
 
-    private void updateAttachedBlock(Sign sign, Round round, boolean isCurrentMap) {
+    private void updateAttachedBlock(Sign sign, Round round, boolean isCurrent) {
         Block attached = getAttachedBlock(sign.getBlock());
         if (attached == null) {
             return;
         }
         XMaterial concrete;
-        if (round != null && isCurrentMap) {
+        if (round != null && isCurrent) {
             if (round.state() == Round.State.COUNTDOWN) {
                 concrete = XMaterial.YELLOW_CONCRETE;
             } else if (round.state() == Round.State.PAUSED) {
@@ -169,6 +191,10 @@ public final class SignManager implements Listener {
                 plugin.messages().send(player, "arena.not-found", Placeholder.unparsed("arena", match.mapId()));
                 return;
             }
+            if (game.arenaPlayerCount(arena.id()) >= arena.maxPlayers()) {
+                plugin.messages().send(player, "sign-game-full");
+                return;
+            }
             if (!game.selectMap(arena.id())) {
                 plugin.messages().send(player, "arena.select-busy");
                 return;
@@ -177,7 +203,8 @@ public final class SignManager implements Listener {
                 player.teleport(arena.waitingLobby());
             }
             game.enterWaitingLobby(player, arena);
-        } else if (game.isMapSelected(match.mapId())) {
+            updateAll();
+        } else if (game.isCurrentArena(match.mapId())) {
             game.randomJoin(player);
         } else {
             plugin.messages().send(player, "round-already-running");
